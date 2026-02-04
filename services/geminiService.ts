@@ -70,10 +70,10 @@ If a component exists in more than one Powertrain or Battery Pack (e.g., "MCU Re
 
 ### OPERATIONAL DIRECTIVES:
 - **DETERMINISM**: Use ONLY spreadsheet values. If missing, say so.
-- **LANGUAGE**: Respond in ${targetLanguageName.toUpperCase()} but keep tech terms (MCU, KSI, CAN, PIN) in English.
+- **LANGUAGE ENFORCEMENT**: You MUST respond entirely and exclusively in ${targetLanguageName.toUpperCase()}. Translate all conversational text, instructions, and diagnostics. Strictly keep only technical labels (MCU, KSI, CAN, PIN, Relay, GND, BAT) in English for technical accuracy.
 
 ### OUTPUT JSON SCHEMA:
-- "answer": Comprehensive Markdown response.
+- "answer": Comprehensive Markdown response in ${targetLanguageName.toUpperCase()}.
 - "suggestions": 3 context-aware technical follow-ups or system choices.
 - "isUnclear": True if no relevant data found.`;
 
@@ -90,7 +90,7 @@ ${chatHistory}
 "${query}"
 
 ### FINAL ACTION:
-Reason through the data. Check for multi-system overlap first. Use [STEP X] and [PIN X] tags for structure. Output JSON.`;
+Reason through the data. Check for multi-system overlap first. Use [STEP X] and [PIN X] tags for structure. You MUST respond in ${targetLanguageName}. Output JSON.`;
   
     const result = await ai.models.generateContent({
         model: 'gemini-3-pro-preview', 
