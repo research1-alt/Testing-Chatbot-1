@@ -9,36 +9,22 @@ interface ChatMessageProps {
   onSendMessage: (message: string) => void;
 }
 
-/**
- * Transforms various URL formats into direct displayable image streams.
- * Crucial for Google Drive images in spreadsheets.
- */
 const getDirectImageUrl = (url: string) => {
   if (!url) return '';
   const trimmed = url.trim();
-  
-  // Handle Google Drive Links (Automatic conversion to direct stream)
   if (trimmed.includes('drive.google.com')) {
     let id = '';
-    // Standard /d/ID/view format
     const dMatch = trimmed.match(/\/d\/([a-zA-Z0-9_-]+)/);
     if (dMatch) id = dMatch[1];
-    
-    // ?id=ID format
     if (!id) {
         const idMatch = trimmed.match(/[?&]id=([a-zA-Z0-9_-]+)/);
         if (idMatch) id = idMatch[1];
     }
-    
-    // Convert to Direct Stream URL
     if (id) return `https://lh3.googleusercontent.com/d/${id}`;
   }
-  
-  // Also handle direct image links pasted raw
   if (/\.(jpg|jpeg|png|webp|gif|svg)$/i.test(trimmed)) {
     return trimmed;
   }
-  
   return null;
 };
 
@@ -66,7 +52,7 @@ async function decodeAudioData(data: Uint8Array, ctx: AudioContext, sampleRate: 
 }
 
 const UserIcon: React.FC = () => (
-    <div className="w-8 h-8 rounded-full bg-green-500 flex items-center justify-center font-bold text-sm text-white flex-shrink-0 shadow-sm border-2 border-white">U</div>
+    <div className="w-8 h-8 rounded-full bg-green-600 flex items-center justify-center font-bold text-sm text-white flex-shrink-0 shadow-sm border-2 border-white">U</div>
 );
 
 const ChatMessage: React.FC<ChatMessageProps> = ({ message, language, onSendMessage }) => {
@@ -80,14 +66,12 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message, language, onSendMess
   const audioCacheRef = useRef<AudioBuffer | null>(null);
 
   const processContent = (text: string) => {
-    // 1. Detect Markdown Images, Standalone Drive Links, and Direct Image URLs
     const mdRegex = /(!\[.*?\]\(.*?\))/g;
     const linkRegex = /(https?:\/\/(?:drive\.google\.com\/[^\s\n)]+|[^\s\n)]+\.(?:jpg|jpeg|png|webp|gif|svg)))/gi;
     
     const imageCards: React.ReactNode[] = [];
     let processedText = text;
     
-    // First pass: Markdown Images
     const mdMatches = text.match(mdRegex);
     if (mdMatches) {
         mdMatches.forEach((match, idx) => {
@@ -102,7 +86,6 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message, language, onSendMess
         });
     }
 
-    // Second pass: Raw technical links from spreadsheet that were missed by Markdown
     const linkMatches = processedText.match(linkRegex);
     if (linkMatches) {
         linkMatches.forEach((url, idx) => {
@@ -114,15 +97,15 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message, language, onSendMess
         });
     }
 
-    // 3. Render structured text
-    const parts = processedText.split(/(SAFETY WARNING:|PRO-TIP:|\[STEP \d+\]|^\s*[•\-*]|\*\*.*?\*\*|\b\d+(?:\.\d+)?[V|v|A|a]\b|\bPin \d+[a-z]?\b|\b\d+ Ohm\b|\bErr-\d+\b)/gm);
+    // Comprehensive regex for tags used in the user's spreadsheet
+    const parts = processedText.split(/(SAFETY WARNING:|PRO-TIP:|\[STEP \d+\]|\[PIN [a-zA-Z0-9]+\]|\bPin [a-zA-Z0-9]+\b|^\s*[•\-*]|\*\*.*?\*\*|\b\d+(?:\.\d+)?[V|v|A|a]\b|\b\d+ Ohm\b|\bErr-\d+\b)/gm);
     
     const contentNodes: React.ReactNode[] = parts.map((part, index) => {
         if (!part || !part.trim()) return null;
 
         if (part === "SAFETY WARNING:") {
             return (
-                <div key={index} className="flex items-center gap-3 mt-4 mb-3 bg-red-50 border-2 border-red-200 p-4 rounded-2xl shadow-sm">
+                <div key={index} className="flex items-center gap-3 mt-4 mb-3 bg-red-50 border-2 border-red-200 p-4 rounded-2xl shadow-sm animate-pulse">
                     <span className="text-2xl">⚠️</span>
                     <span className="text-[11px] font-black text-red-700 uppercase tracking-widest leading-tight">MANDATORY SAFETY CHECK</span>
                 </div>
@@ -142,9 +125,22 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message, language, onSendMess
             const stepNum = part.match(/\d+/)?.[0] || '?';
             return (
                 <div key={index} className="flex items-center gap-3 mt-8 mb-4 first:mt-2">
-                    <span className="flex items-center justify-center bg-sky-900 text-white min-w-[32px] h-8 rounded-full text-[13px] font-black shadow-xl ring-2 ring-sky-100">{stepNum}</span>
+                    <div className="flex flex-col items-center">
+                        <span className="flex items-center justify-center bg-sky-900 text-white min-w-[32px] h-8 rounded-full text-[13px] font-black shadow-xl ring-2 ring-sky-100">{stepNum}</span>
+                        <div className="w-0.5 h-6 bg-sky-100 mt-2"></div>
+                    </div>
                     <span className="h-[1px] flex-1 bg-sky-100"></span>
                 </div>
+            );
+        }
+
+        if (/^\[PIN [a-zA-Z0-9]+\]$/.test(part) || /\bPin [a-zA-Z0-9]+\b/.test(part)) {
+            const pinName = part.replace('[', '').replace(']', '').replace('Pin ', '');
+            return (
+                <span key={index} className="inline-flex items-center gap-1.5 px-3 py-1 bg-slate-900 text-sky-400 font-black rounded-lg border-b-2 border-slate-700 mx-1 text-[11px] shadow-sm uppercase tracking-tighter">
+                    <div className="w-1.5 h-1.5 rounded-full bg-sky-400"></div>
+                    PIN {pinName}
+                </span>
             );
         }
 
@@ -152,7 +148,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message, language, onSendMess
             return <strong key={index} className="font-black text-slate-900 bg-yellow-50 px-1 rounded-md border border-yellow-100">{part.slice(2, -2)}</strong>;
         }
 
-        if (/\b\d+(?:\.\d+)?[V|v|A|a]\b|\bPin \d+[a-z]?\b|\b\d+ Ohm\b|\bErr-\d+\b/.test(part)) {
+        if (/\b\d+(?:\.\d+)?[V|v|A|a]\b|\b\d+ Ohm\b|\bErr-\d+\b/.test(part)) {
             return <span key={index} className="inline-block px-2 py-0.5 bg-sky-100 text-sky-900 font-black rounded-lg border border-sky-200 mx-0.5 text-[11px] shadow-sm">{part}</span>;
         }
 
@@ -195,11 +191,12 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message, language, onSendMess
   };
 
   const formatMessage = (text: string) => {
-    if (text.length < 25 && /\d+/.test(text) && !isUser) {
+    if (text.length < 30 && /\b\d+[VvAa]\b/.test(text) && !isUser) {
         return (
-            <div className="flex flex-col items-center justify-center p-6 bg-slate-900 rounded-[2rem] border-4 border-slate-100 shadow-2xl">
-                <span className="text-[10px] font-black text-sky-400 uppercase tracking-[0.4em] mb-2">Essential Data</span>
-                <span className="text-4xl font-black text-white tracking-tighter">{text}</span>
+            <div className="flex flex-col items-center justify-center p-8 bg-slate-900 rounded-[2.5rem] border-4 border-slate-100 shadow-2xl">
+                <span className="text-[10px] font-black text-sky-400 uppercase tracking-[0.4em] mb-2 text-center">Measured Spec</span>
+                <span className="text-5xl font-black text-white tracking-tighter">{text.toUpperCase()}</span>
+                <div className="mt-4 px-4 py-1.5 bg-sky-900/50 rounded-full text-[9px] font-black text-sky-300 uppercase tracking-widest">Database Verified</div>
             </div>
         );
     }
@@ -282,12 +279,12 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message, language, onSendMess
         )}
 
         {zoomedImage && (
-            <div className="fixed inset-0 z-[100] bg-slate-950/98 flex flex-col items-center justify-center backdrop-blur-xl animate-in fade-in duration-300" onClick={() => setZoomedImage(null)}>
+            <div className="fixed inset-0 z-[100] bg-slate-950/98 flex items-center justify-center backdrop-blur-xl animate-in fade-in duration-300" onClick={() => setZoomedImage(null)}>
                 <div className="absolute top-10 right-10">
                     <button className="w-14 h-14 bg-white rounded-2xl flex items-center justify-center text-black shadow-xl"><svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M6 18L18 6M6 6l12 12" /></svg></button>
                 </div>
                 <img src={zoomedImage.url} alt={zoomedImage.alt} className="max-w-[90%] max-h-[80%] shadow-2xl rounded-3xl object-contain border-4 border-white/10" />
-                <h4 className="text-white font-black text-xl mt-8 uppercase tracking-widest">{zoomedImage.alt}</h4>
+                <h4 className="absolute bottom-10 text-white font-black text-xl uppercase tracking-widest bg-black/40 px-8 py-3 rounded-full backdrop-blur-md">{zoomedImage.alt}</h4>
             </div>
         )}
     </div>

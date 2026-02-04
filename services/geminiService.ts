@@ -46,28 +46,36 @@ export async function getChatbotResponse(
     const systemInstruction = `YOU ARE "OSM MASTER MENTOR"—THE AUTHORITATIVE SERVICE INTELLIGENCE FOR OMEGA SEIKI MOBILITY.
 
 ### SPREADSHEET COLUMN MAPPING:
-The [MASTER DATABASE] CSV uses these exact headers. You MUST use them to find data:
-1. **Topic / Component**: The main subject (e.g., "MCU Relay", "Power Flow").
+The [MASTER DATABASE] CSV uses these headers:
+1. **Topic / Component**: The main subject (e.g., "MCU Relay").
 2. **Category**: The system group (e.g., "Fault Finding", "Startup").
-3. **Technical Specs**: Raw data (e.g., "12V", "Type: RB3").
-4. **Procedure / Steps / Pin-out**: The instructions.
-5. **Diagram Link**: Direct Google Drive URLs for schematics.
+3. **Technical Specs**: Raw data (e.g., "12V").
+4. **Procedure / Steps / Pin-out**: Technical instructions.
+5. **Diagram Link**: Schematic URLs.
+
+### STANDARD HANDLING LOGIC (MULTIPLE SYSTEMS):
+If a component exists in more than one Powertrain or Battery Pack (e.g., "MCU Relay" in both "Matel MCU" and "Virya Gen 2"):
+1. **DETECT MATCHES**: Identify all systems containing this component.
+2. **ASK CLARIFICATION**: Do NOT provide technical details immediately.
+3. **FORMAT**: Use this exact response format:
+   "[Component Name] is available in multiple systems. Please confirm which system you want information about:"
+4. **SUGGESTIONS**: List the matching systems as buttons in the "suggestions" array.
+5. **PROVIDE DATA**: Only after the user selects a system, provide Specification, Operation, Wiring, and Troubleshooting data.
 
 ### DATA EXTRACTION RULES:
-- **PROCEDURES**: Look for text starting with "[STEP 1]", "[STEP 2]". Present these steps clearly using a structured timeline.
-- **PIN POSITION**: Look for tags like "[PIN 87a]" or "[PIN 30]". When found, represent them in a Markdown Table or formatted list.
-- **SPECIFICATIONS**: Extract data from the "Technical Specs" column for voltages and part types.
-- **DIAGRAMS**: If the "Diagram Link" column contains a URL, provide it as a direct link.
+- **PROCEDURES**: Look for "[STEP 1]", "[STEP 2]". Present them clearly.
+- **PIN POSITION**: Look for "[PIN 87a]" or "[PIN 30]". Represent them as high-visibility labels.
+- **SPECIFICATIONS**: Extract from "Technical Specs" column.
+- **DIAGRAMS**: If "Diagram Link" contains a URL, provide it.
 
 ### OPERATIONAL DIRECTIVES:
-- **IDENTIFY VEHICLE**: If the user asks about "Matel" or "Virya", search the "Topic" or "Procedure" columns for those keywords.
-- **DETERMINISM**: Use ONLY the values provided in the spreadsheet. If data is missing, admit it.
-- **LANGUAGE**: Respond in ${targetLanguageName.toUpperCase()} but keep technical terms (MCU, KSI, CAN, PIN) in English.
+- **DETERMINISM**: Use ONLY spreadsheet values. If missing, say so.
+- **LANGUAGE**: Respond in ${targetLanguageName.toUpperCase()} but keep tech terms (MCU, KSI, CAN, PIN) in English.
 
 ### OUTPUT JSON SCHEMA:
 - "answer": Comprehensive Markdown response.
-- "suggestions": 3 context-aware technical follow-ups.
-- "isUnclear": True only if the spreadsheet has zero relevant data for the query.`;
+- "suggestions": 3 context-aware technical follow-ups or system choices.
+- "isUnclear": True if no relevant data found.`;
 
     const fullPrompt = `### MASTER DATABASE (CONSOLIDATED CSV):
 ${context?.split('[ADMIN UPLOADED MANUALS]')[0] || "DATABASE SYNC ERROR."}
@@ -82,7 +90,7 @@ ${chatHistory}
 "${query}"
 
 ### FINAL ACTION:
-Scan the "Topic / Component" and "Procedure / Steps / Pin-out" columns. Use the [STEP X] and [PIN X] tags to structure the response. Filter by powertrain context if detected. Return JSON.`;
+Reason through the data. Check for multi-system overlap first. Use [STEP X] and [PIN X] tags for structure. Output JSON.`;
   
     const result = await ai.models.generateContent({
         model: 'gemini-3-pro-preview', 
@@ -113,7 +121,7 @@ Scan the "Topic / Component" and "Procedure / Steps / Pin-out" columns. Use the 
   } catch (error: any) {
     console.error("OSM AI Failure:", error);
     return {
-        answer: "Technical Intelligence Link Severed. Verify Sheet 'AI_SYNC' is published to web and API key is active.",
+        answer: "Technical Intelligence Link Severed. Verify Sheet 'AI_SYNC' is published to web.",
         suggestions: ["Reconnect System"],
         isUnclear: true
     };
@@ -129,9 +137,10 @@ export async function generateSpeech(text: string, language: string): Promise<st
 
         const cleanText = text
             .replace(/SAFETY WARNING:/g, 'Warning.')
-            .replace(/!\[.*?\]\(.*?\)/g, 'Refer to technical drawing.') 
+            .replace(/!\[.*?\]\(.*?\)/g, 'Refer to schematic.') 
             .replace(/(https?:\/\/[^\s\n)]+)/g, '')
             .replace(/\[STEP \d+\]/g, 'Step.')
+            .replace(/\[PIN ([a-zA-Z0-9]+)\]/g, 'Pin $1.')
             .replace(/[*#_~`>]/g, '')
             .replace(/\|/g, ' ') 
             .trim();
@@ -140,7 +149,7 @@ export async function generateSpeech(text: string, language: string): Promise<st
 
         const response = await ai.models.generateContent({
             model: 'gemini-2.5-flash-preview-tts',
-            contents: [{ parts: [{ text: `Read clearly in ${targetLanguageName}: ${cleanText}` }] }],
+            contents: [{ parts: [{ text: `Read in ${targetLanguageName}: ${cleanText}` }] }],
             config: {
                 responseModalities: [Modality.AUDIO],
                 speechConfig: { 
