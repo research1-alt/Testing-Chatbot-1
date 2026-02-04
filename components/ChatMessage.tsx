@@ -22,8 +22,13 @@ const getDirectImageUrl = (url: string) => {
     }
     if (id) return `https://lh3.googleusercontent.com/d/${id}`;
   }
-  if (/\.(jpg|jpeg|png|webp|gif|svg)$/i.test(trimmed)) {
+  // If it's a common image hosting link or contains image extensions
+  if (/\.(jpg|jpeg|png|webp|gif|svg)(\?.*)?$/i.test(trimmed)) {
     return trimmed;
+  }
+  // Fallback for generic URLs that might be images
+  if (trimmed.startsWith('http') && !trimmed.includes(' ')) {
+      return trimmed;
   }
   return null;
 };
@@ -66,8 +71,8 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message, language, onSendMess
   const audioCacheRef = useRef<AudioBuffer | null>(null);
 
   const processContent = (text: string) => {
+    // Regex to match Markdown images or raw URLs that look like images
     const mdRegex = /(!\[.*?\]\(.*?\))/g;
-    const linkRegex = /(https?:\/\/(?:drive\.google\.com\/[^\s\n)]+|[^\s\n)]+\.(?:jpg|jpeg|png|webp|gif|svg)))/gi;
     
     const imageCards: React.ReactNode[] = [];
     let processedText = text;
@@ -82,17 +87,6 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message, language, onSendMess
                     imageCards.push(renderImage(inner[1] || "Technical Schematic", directUrl, `md-${idx}`));
                     processedText = processedText.replace(match, ''); 
                 }
-            }
-        });
-    }
-
-    const linkMatches = processedText.match(linkRegex);
-    if (linkMatches) {
-        linkMatches.forEach((url, idx) => {
-            const directUrl = getDirectImageUrl(url);
-            if (directUrl) {
-                imageCards.push(renderImage("Technical Drawing", directUrl, `raw-${idx}`));
-                processedText = processedText.replace(url, '');
             }
         });
     }

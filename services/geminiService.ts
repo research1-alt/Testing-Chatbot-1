@@ -15,12 +15,12 @@ const languageMap: { [key: string]: string } = {
     'te-IN': 'Telugu (తెలుగు)',
     'bn-IN': 'Bengali (বাংলা)',
     'gu-IN': 'Gujarati (ગુજરાતી)',
-    'kn-IN': 'Kannada (ಕನ್ನಡ)',
+    'kn-IN': 'Kannada (कನ್ನಡ)',
     'ml-IN': 'Malayalam (മലയാളം)',
     'pa-IN': 'Punjabi (ਪੰਜਾਬੀ)',
     'ur-IN': 'Urdu (اردو)',
     'as-IN': 'Assamese (অসমীয়া)',
-    'or-IN': 'Odia (ଓଡ଼ିଆ)',
+    'or-IN': 'Odia (ଓਡੀਆ)',
 };
 
 export async function getChatbotResponse(
@@ -47,29 +47,34 @@ export async function getChatbotResponse(
 
 ### CORE OPERATIONAL DIRECTIVE:
 You MUST respond EXCLUSIVELY in the NATIVE SCRIPT of the selected language: ${targetLanguageFull}. 
-- DO NOT use Romanized Hindi/Transliteration (e.g., do not write "Karein", write "करें").
-- Translate all conversational text, explanations, and safety warnings into the native script.
+- DO NOT use Romanized Hindi/Transliteration.
+- Translate explanations and safety warnings into the native script.
 
-### TAG PRESERVATION RULE:
-To maintain UI formatting, you MUST keep these specific structural tags in English:
-1. **Steps**: Use [STEP 1], [STEP 2], etc. (e.g., "[STEP 1] बैटरी वोल्टेज की जांच करें")
-2. **Pins**: Use [PIN 30], [PIN 87a], etc. (e.g., "[PIN 30] पर वोल्टेज देखें")
-3. **Hardware Labels**: Keep MCU, KSI, CAN, PIN, Relay, GND, BAT, V, A, Ohm in English.
+### STANDARD HANDLING LOGIC FOR COMMON COMPONENTS (MANDATORY):
+Rule 1: Identify Component/System Overlap
+If a component (e.g., "MCU Relay", "Converter") exists in more than one Powertrain or Battery Pack (e.g., "Matel" and "Virya"):
+Rule 2: Ask Clarification Before Answering
+DO NOT provide technical details immediately. Use this exact format:
+"[COMPONENT NAME] is available in multiple systems. Please confirm which system you want information about:
+1. [System 1 Name]
+2. [System 2 Name]"
+Add these system names to the "suggestions" array.
+
+### DIAGRAM DISPLAY RULE:
+The "Diagram Link" (Column 5) in the database is CRITICAL.
+- If a matching row contains a URL in the "Diagram Link" column, you MUST embed it in the "answer" field using Markdown: ![Diagram](URL).
+- ALWAYS place the diagram immediately after the [STEP] or [PIN] it refers to, or at the end of the procedure.
+
+### TAG PRESERVATION:
+Keep these tags in English: [STEP 1], [STEP 2], [PIN 30], [PIN 87a], MCU, KSI, CAN, GND, BAT, V, A, Ohm.
 
 ### SPREADSHEET COLUMN MAPPING:
-The [MASTER DATABASE] CSV uses these headers:
 1. Topic / Component | 2. Category | 3. Technical Specs | 4. Procedure / Pin-out | 5. Diagram Link
 
-### HANDLING MULTIPLE SYSTEMS:
-If a component exists in multiple systems (e.g., "MCU Relay" in both "Matel" and "Virya"):
-1. **DETECT MATCHES**: Find all systems.
-2. **ASK CLARIFICATION**: "यह घटक कई प्रणालियों में उपलब्ध है। कृपया चुनें:"
-3. **SUGGESTIONS**: List the system names as buttons.
-
 ### OUTPUT JSON SCHEMA:
-- "answer": Comprehensive Markdown response in the NATIVE SCRIPT of ${targetLanguageFull}.
-- "suggestions": 3 context-aware technical follow-ups translated into the native script.
-- "isUnclear": True if data is missing.`;
+- "answer": Markdown response in NATIVE SCRIPT of ${targetLanguageFull}. Embed diagrams using ![]().
+- "suggestions": 3 context-aware buttons.
+- "isUnclear": True if clarification is needed (Rule 2).`;
 
     const fullPrompt = `### MASTER DATABASE:
 ${context?.split('[ADMIN UPLOADED MANUALS]')[0] || "DATABASE SYNC ERROR."}
@@ -84,7 +89,7 @@ ${chatHistory}
 "${query}"
 
 ### FINAL COMMAND:
-Provide the technical solution. Use NATIVE SCRIPT for ${targetLanguageFull}. Ensure [STEP X] and [PIN X] tags are present but descriptions are translated. Output JSON.`;
+If multi-system match exists, follow Rule 2. If single match, provide technical solution with DIAGRAMS from Column 5 embedded as Markdown images. Use NATIVE SCRIPT for ${targetLanguageFull}. Output JSON.`;
   
     const result = await ai.models.generateContent({
         model: 'gemini-3-pro-preview', 
