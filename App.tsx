@@ -343,7 +343,9 @@ const App: React.FC = () => {
               <img src={LOGO_URL} alt="OSM Logo" className="h-10 w-auto object-contain object-left pr-4 select-none pointer-events-none" style={{ mixBlendMode: 'multiply' }} />
               <div className="flex items-center gap-2 mt-1">
                 <div className={`w-1.5 h-1.5 rounded-full ${syncStatus === 'success' ? 'bg-green-500' : syncStatus === 'error' ? 'bg-red-500' : 'bg-yellow-500 animate-pulse'}`}></div>
-                <p className="text-[8px] text-slate-400 font-black uppercase tracking-[0.2em]">{syncStatus === 'syncing' ? 'Syncing...' : 'Service Intelligence'}</p>
+                <p className="text-[8px] text-slate-400 font-black uppercase tracking-[0.2em]">
+                  {selectedLang.name} • {syncStatus === 'syncing' ? 'Syncing...' : 'Live Intelligence'}
+                </p>
               </div>
             </div>
           </div>

@@ -9,18 +9,18 @@ interface GeminiResponse {
 
 const languageMap: { [key: string]: string } = {
     'en-US': 'English',
-    'hi-IN': 'Hindi',
-    'mr-IN': 'Marathi',
-    'ta-IN': 'Tamil',
-    'te-IN': 'Telugu',
-    'bn-IN': 'Bengali',
-    'gu-IN': 'Gujarati',
-    'kn-IN': 'Kannada',
-    'ml-IN': 'Malayalam',
-    'pa-IN': 'Punjabi',
-    'ur-IN': 'Urdu',
-    'as-IN': 'Assamese',
-    'or-IN': 'Odia',
+    'hi-IN': 'Hindi (हिन्दी)',
+    'mr-IN': 'Marathi (मराठी)',
+    'ta-IN': 'Tamil (தமிழ்)',
+    'te-IN': 'Telugu (తెలుగు)',
+    'bn-IN': 'Bengali (বাংলা)',
+    'gu-IN': 'Gujarati (ગુજરાતી)',
+    'kn-IN': 'Kannada (ಕನ್ನಡ)',
+    'ml-IN': 'Malayalam (മലയാളം)',
+    'pa-IN': 'Punjabi (ਪੰਜਾਬੀ)',
+    'ur-IN': 'Urdu (اردو)',
+    'as-IN': 'Assamese (অসমীয়া)',
+    'or-IN': 'Odia (ଓଡ଼ିଆ)',
 };
 
 export async function getChatbotResponse(
@@ -30,7 +30,7 @@ export async function getChatbotResponse(
     language: string,
 ): Promise<{ answer: string, suggestions: string[], isUnclear: boolean }> {
   const apiKey = process.env.API_KEY;
-  const targetLanguageName = languageMap[language] || 'English';
+  const targetLanguageFull = languageMap[language] || 'English';
   
   if (!apiKey || apiKey === "") {
       return {
@@ -45,52 +45,46 @@ export async function getChatbotResponse(
     
     const systemInstruction = `YOU ARE "OSM MASTER MENTOR"—THE AUTHORITATIVE SERVICE INTELLIGENCE FOR OMEGA SEIKI MOBILITY.
 
+### CORE OPERATIONAL DIRECTIVE:
+You MUST respond EXCLUSIVELY in the NATIVE SCRIPT of the selected language: ${targetLanguageFull}. 
+- DO NOT use Romanized Hindi/Transliteration (e.g., do not write "Karein", write "करें").
+- Translate all conversational text, explanations, and safety warnings into the native script.
+
+### TAG PRESERVATION RULE:
+To maintain UI formatting, you MUST keep these specific structural tags in English:
+1. **Steps**: Use [STEP 1], [STEP 2], etc. (e.g., "[STEP 1] बैटरी वोल्टेज की जांच करें")
+2. **Pins**: Use [PIN 30], [PIN 87a], etc. (e.g., "[PIN 30] पर वोल्टेज देखें")
+3. **Hardware Labels**: Keep MCU, KSI, CAN, PIN, Relay, GND, BAT, V, A, Ohm in English.
+
 ### SPREADSHEET COLUMN MAPPING:
 The [MASTER DATABASE] CSV uses these headers:
-1. **Topic / Component**: The main subject (e.g., "MCU Relay").
-2. **Category**: The system group (e.g., "Fault Finding", "Startup").
-3. **Technical Specs**: Raw data (e.g., "12V").
-4. **Procedure / Steps / Pin-out**: Technical instructions.
-5. **Diagram Link**: Schematic URLs.
+1. Topic / Component | 2. Category | 3. Technical Specs | 4. Procedure / Pin-out | 5. Diagram Link
 
-### STANDARD HANDLING LOGIC (MULTIPLE SYSTEMS):
-If a component exists in more than one Powertrain or Battery Pack (e.g., "MCU Relay" in both "Matel MCU" and "Virya Gen 2"):
-1. **DETECT MATCHES**: Identify all systems containing this component.
-2. **ASK CLARIFICATION**: Do NOT provide technical details immediately.
-3. **FORMAT**: Use this exact response format:
-   "[Component Name] is available in multiple systems. Please confirm which system you want information about:"
-4. **SUGGESTIONS**: List the matching systems as buttons in the "suggestions" array.
-5. **PROVIDE DATA**: Only after the user selects a system, provide Specification, Operation, Wiring, and Troubleshooting data.
-
-### DATA EXTRACTION RULES:
-- **PROCEDURES**: Look for "[STEP 1]", "[STEP 2]". Present them clearly.
-- **PIN POSITION**: Look for "[PIN 87a]" or "[PIN 30]". Represent them as high-visibility labels.
-- **SPECIFICATIONS**: Extract from "Technical Specs" column.
-- **DIAGRAMS**: If "Diagram Link" contains a URL, provide it.
-
-### OPERATIONAL DIRECTIVES:
-- **DETERMINISM**: Use ONLY spreadsheet values. If missing, say so.
-- **LANGUAGE ENFORCEMENT**: You MUST respond entirely and exclusively in ${targetLanguageName.toUpperCase()}. Translate all conversational text, instructions, and diagnostics. Strictly keep only technical labels (MCU, KSI, CAN, PIN, Relay, GND, BAT) in English for technical accuracy.
+### HANDLING MULTIPLE SYSTEMS:
+If a component exists in multiple systems (e.g., "MCU Relay" in both "Matel" and "Virya"):
+1. **DETECT MATCHES**: Find all systems.
+2. **ASK CLARIFICATION**: "यह घटक कई प्रणालियों में उपलब्ध है। कृपया चुनें:"
+3. **SUGGESTIONS**: List the system names as buttons.
 
 ### OUTPUT JSON SCHEMA:
-- "answer": Comprehensive Markdown response in ${targetLanguageName.toUpperCase()}.
-- "suggestions": 3 context-aware technical follow-ups or system choices.
-- "isUnclear": True if no relevant data found.`;
+- "answer": Comprehensive Markdown response in the NATIVE SCRIPT of ${targetLanguageFull}.
+- "suggestions": 3 context-aware technical follow-ups translated into the native script.
+- "isUnclear": True if data is missing.`;
 
-    const fullPrompt = `### MASTER DATABASE (CONSOLIDATED CSV):
+    const fullPrompt = `### MASTER DATABASE:
 ${context?.split('[ADMIN UPLOADED MANUALS]')[0] || "DATABASE SYNC ERROR."}
 
-### SUPPLEMENTAL ADMIN UPLOADS:
+### MANUALS:
 ${context?.split('[ADMIN UPLOADED MANUALS]')[1] || "NO SUPPLEMENTAL FILES."}
 
-### CHAT LOG:
+### CHAT HISTORY:
 ${chatHistory}
 
 ### TECHNICIAN QUERY:
 "${query}"
 
-### FINAL ACTION:
-Reason through the data. Check for multi-system overlap first. Use [STEP X] and [PIN X] tags for structure. You MUST respond in ${targetLanguageName}. Output JSON.`;
+### FINAL COMMAND:
+Provide the technical solution. Use NATIVE SCRIPT for ${targetLanguageFull}. Ensure [STEP X] and [PIN X] tags are present but descriptions are translated. Output JSON.`;
   
     const result = await ai.models.generateContent({
         model: 'gemini-3-pro-preview', 
@@ -121,7 +115,7 @@ Reason through the data. Check for multi-system overlap first. Use [STEP X] and 
   } catch (error: any) {
     console.error("OSM AI Failure:", error);
     return {
-        answer: "Technical Intelligence Link Severed. Verify Sheet 'AI_SYNC' is published to web.",
+        answer: "Technical Intelligence Link Severed. Please check language settings.",
         suggestions: ["Reconnect System"],
         isUnclear: true
     };
