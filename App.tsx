@@ -344,7 +344,7 @@ const App: React.FC = () => {
               <div className="flex items-center gap-2 mt-1">
                 <div className={`w-1.5 h-1.5 rounded-full ${syncStatus === 'success' ? 'bg-green-500' : syncStatus === 'error' ? 'bg-red-500' : 'bg-yellow-500 animate-pulse'}`}></div>
                 <p className="text-[8px] text-slate-400 font-black uppercase tracking-[0.2em]">
-                  {selectedLang.name} • {syncStatus === 'syncing' ? 'Syncing...' : 'Live Intelligence'}
+                  {syncStatus === 'syncing' ? 'Syncing...' : 'Service Intern'}
                 </p>
               </div>
             </div>
