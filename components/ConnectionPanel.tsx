@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { Zap, Cpu, Loader2, Bluetooth, Cable, Globe, AlertCircle, Settings, Info, ShieldCheck, Wifi, WifiOff, Search, Monitor, Smartphone, HelpCircle, RefreshCcw, Sliders, PlayCircle, Database, CheckCircle2 } from 'lucide-react';
-import { ConnectionStatus, HardwareStatus, AppMode } from '../types.ts';
+import { Zap, Cpu, Loader2, Bluetooth, Cable, AlertCircle, ShieldCheck, Wifi, WifiOff, Search, Monitor, Smartphone, HelpCircle, RefreshCcw, PlayCircle, Database, CheckCircle2 } from 'lucide-react';
+import { ConnectionStatus, HardwareStatus } from '../types.ts';
 
 interface ConnectionPanelProps {
   status: ConnectionStatus;
@@ -18,7 +18,6 @@ interface ConnectionPanelProps {
   deviceHistory?: string[];
   syncStatus?: 'idle' | 'syncing' | 'success' | 'error';
   onManualSync?: () => void;
-  appMode: AppMode;
 }
 
 const ConnectionPanel: React.FC<ConnectionPanelProps> = ({ 
@@ -34,8 +33,7 @@ const ConnectionPanel: React.FC<ConnectionPanelProps> = ({
   hardwareId = null,
   deviceHistory = [],
   syncStatus = 'idle',
-  onManualSync,
-  appMode
+  onManualSync
 }) => {
   const [isNative, setIsNative] = useState(false);
   const [btSupported, setBtSupported] = useState(true);
@@ -86,12 +84,11 @@ const ConnectionPanel: React.FC<ConnectionPanelProps> = ({
   const currentStatus = getStatusDetail();
 
   return (
-    <div className={`flex flex-col items-center justify-center w-full h-full mx-auto py-6 md:py-10 px-4 overflow-y-auto ${appMode === 'system' ? 'max-w-7xl' : 'max-w-5xl'}`}>
-      <div className={`w-full ${appMode === 'system' ? 'max-w-4xl' : 'max-w-xl'}`}>
-        <div className={`bg-white rounded-[40px] p-6 md:p-12 shadow-2xl border border-slate-200 flex flex-col justify-between min-h-[500px] ${appMode === 'system' ? 'md:grid md:grid-cols-2 md:gap-12' : ''}`}>
-          <div className={appMode === 'system' ? 'flex flex-col justify-between' : ''}>
-            <div>
-              <div className="flex items-center justify-between mb-8 md:mb-10">
+    <div className="flex flex-col items-center justify-center w-full h-full max-w-5xl mx-auto py-6 md:py-10 px-4 overflow-y-auto">
+      <div className="w-full max-w-xl">
+        <div className="bg-white rounded-[40px] p-6 md:p-12 shadow-2xl border border-slate-200 flex flex-col justify-between min-h-[500px]">
+          <div>
+            <div className="flex items-center justify-between mb-8 md:mb-10">
               <div className="flex flex-col">
                 <h3 className="text-xl md:text-2xl font-orbitron font-black text-slate-900 uppercase flex items-center gap-4">
                   <Cpu className="text-indigo-600" size={28} /> Link_Manager
@@ -99,7 +96,7 @@ const ConnectionPanel: React.FC<ConnectionPanelProps> = ({
                 <p className="text-[9px] md:text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-1">Hardware Interface</p>
               </div>
               <div className="flex items-center gap-2">
-                 {!btSupported && <Info size={12} className="text-red-400 animate-pulse" title="Bluetooth is not supported in this browser/system." />}
+                 {!btSupported && <AlertCircle size={12} className="text-red-400 animate-pulse" title="Bluetooth is not supported in this browser/system." />}
                  {isDesktop ? <Monitor size={14} className="text-slate-300" /> : <Smartphone size={14} className="text-slate-300" />}
               </div>
             </div>
@@ -259,23 +256,7 @@ const ConnectionPanel: React.FC<ConnectionPanelProps> = ({
             )}
           </div>
 
-          <div className="flex flex-col gap-4 justify-end">
-            {appMode === 'system' && (
-              <div className="mb-6 p-6 bg-slate-50 rounded-3xl border border-slate-100">
-                <h4 className="text-[10px] font-orbitron font-black text-slate-400 uppercase tracking-widest mb-4">System_Capabilities</h4>
-                <ul className="space-y-3">
-                  <li className="flex items-center gap-3 text-[10px] font-bold text-slate-600">
-                    <CheckCircle2 size={14} className="text-emerald-500" /> High-Speed Serial (921600 Baud)
-                  </li>
-                  <li className="flex items-center gap-3 text-[10px] font-bold text-slate-600">
-                    <CheckCircle2 size={14} className="text-emerald-500" /> Multi-Pane Trace Analysis
-                  </li>
-                  <li className="flex items-center gap-3 text-[10px] font-bold text-slate-600">
-                    <CheckCircle2 size={14} className="text-emerald-500" /> Advanced DBC Decoding Engine
-                  </li>
-                </ul>
-              </div>
-            )}
+          <div className="flex flex-col gap-4">
             <button 
               onClick={() => status === 'connected' ? onDisconnect() : onConnect()} 
               disabled={status === 'connecting'} 
