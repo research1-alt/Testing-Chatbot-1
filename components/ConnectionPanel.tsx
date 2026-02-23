@@ -203,6 +203,15 @@ const ConnectionPanel: React.FC<ConnectionPanelProps> = ({
                       <b>Bluetooth Troubleshooting:</b> If device is invisible, go to System Settings and <b>Unpair/Forget</b> it. Then restart the ESP32.
                     </p>
                   </div>
+                  
+                  {isNative && (
+                    <button 
+                      onClick={() => (window as any).NativeBleBridge?.openBluetoothSettings()}
+                      className="w-full mt-2 flex items-center justify-center gap-2 py-2 bg-indigo-50 border border-indigo-100 rounded-xl text-[9px] font-orbitron font-black text-indigo-600 uppercase hover:bg-indigo-100 transition-all"
+                    >
+                      <Settings size={12} /> Open System BT Settings
+                    </button>
+                  )}
                   <button 
                     onClick={() => {
                       onDisconnect();

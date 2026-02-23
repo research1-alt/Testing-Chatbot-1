@@ -441,33 +441,49 @@ const App: React.FC = () => {
       });
       addDebugLog("BLE: Connecting to GATT Server...");
       const server = await device.gatt.connect();
-      addDebugLog("BLE: GATT Connected. Discovering Service...");
-      await new Promise(r => setTimeout(r, 1000));
+      addDebugLog("BLE: GATT Connected. Discovering Services...");
+      await new Promise(r => setTimeout(r, 1200)); // Increased delay for mobile stability
+      
       let service;
       try {
+        // Try Nordic NUS first
         service = await server.getPrimaryService(UART_SERVICE_UUID);
+        addDebugLog("BLE: NUS Service Found.");
       } catch (e) {
-        if (!device.gatt.connected) {
-          throw new Error("GATT_LOCK: Connection dropped by OS. Please UNPAIR the device from System Settings and try again.");
+        addDebugLog("BLE: NUS Service not found. Trying HM-10...");
+        try {
+          service = await server.getPrimaryService(HM10_SERVICE_UUID);
+          addDebugLog("BLE: HM-10 Service Found.");
+        } catch (e2) {
+          if (!device.gatt.connected) {
+            throw new Error("GATT_LOCK: Connection dropped by OS. Please UNPAIR the device from System Settings and try again.");
+          }
+          addDebugLog("ERROR: No compatible UART Service found (NUS/HM-10).");
+          const allServices = await server.getPrimaryServices();
+          allServices.forEach((s: any) => addDebugLog(` - Service: ${s.uuid}`));
+          throw new Error("Required UART Service not found on this device.");
         }
-        addDebugLog("ERROR: NUS Service not found. Attempting to list all services...");
-        const allServices = await server.getPrimaryServices();
-        allServices.forEach((s: any) => addDebugLog(` - Service: ${s.uuid}`));
-        throw new Error("Required UART Service not found on this device.");
       }
-      addDebugLog("BLE: Service Found. Discovering Characteristics...");
+
+      addDebugLog("BLE: Discovering Characteristics...");
       let txChar;
+      let rxChar;
+      
       try {
-        txChar = await service.getCharacteristic(TX_CHAR_UUID);
-      } catch (e) {
-        addDebugLog("WARN: TX Characteristic not found in NUS. Trying HM-10...");
-        if (service.uuid === HM10_SERVICE_UUID.toLowerCase()) {
-          txChar = await service.getCharacteristic("0000ffe1-0000-1000-8000-00805f9b34fb");
+        if (service.uuid.toLowerCase() === UART_SERVICE_UUID.toLowerCase()) {
+          txChar = await service.getCharacteristic(TX_CHAR_UUID);
+          try { rxChar = await service.getCharacteristic(RX_CHAR_UUID); } catch(e) { addDebugLog("BLE: RX Char not found in NUS."); }
         } else {
-          throw e;
+          // HM-10 uses the same UUID for both TX and RX usually
+          txChar = await service.getCharacteristic("0000ffe1-0000-1000-8000-00805f9b34fb");
+          rxChar = txChar;
         }
+      } catch (e) {
+        addDebugLog("ERROR: Characteristic discovery failed.");
+        throw e;
       }
-      addDebugLog("BLE: TX Characteristic Found. Starting Notifications...");
+
+      addDebugLog("BLE: Starting Notifications...");
       await txChar.startNotifications();
       txChar.addEventListener('characteristicvaluechanged', (event: any) => {
         const chunk = new TextDecoder().decode(event.target.value);
@@ -486,15 +502,12 @@ const App: React.FC = () => {
           }
         }
       });
-      try { 
-        if (service.uuid === HM10_SERVICE_UUID.toLowerCase()) {
-          bleRxCharacteristicRef.current = await service.getCharacteristic("0000ffe1-0000-1000-8000-00805f9b34fb");
-        } else {
-          bleRxCharacteristicRef.current = await service.getCharacteristic(RX_CHAR_UUID); 
-        }
-        addDebugLog("BLE: RX Characteristic Found. Bi-directional link active.");
-      } catch (e) {
-        addDebugLog("BLE: RX Characteristic not found. Read-only mode.");
+
+      if (rxChar) {
+        bleRxCharacteristicRef.current = rxChar;
+        addDebugLog("BLE: Bi-directional link active.");
+      } else {
+        addDebugLog("BLE: Read-only mode active.");
       }
       setFrames([]); setLatestFrames({}); frameMapRef.current.clear();
       sessionStartTimeRef.current = performance.now();
