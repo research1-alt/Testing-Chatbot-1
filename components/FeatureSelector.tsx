@@ -4,10 +4,9 @@ import { Bluetooth, Database, ArrowRight, Zap, LineChart, FileText, LogOut } fro
 interface FeatureSelectorProps {
   onSelect: (view: 'live' | 'decoder') => void;
   onLogout?: () => void;
-  onResetMode?: () => void;
 }
 
-const FeatureSelector: React.FC<FeatureSelectorProps> = ({ onSelect, onLogout, onResetMode }) => {
+const FeatureSelector: React.FC<FeatureSelectorProps> = ({ onSelect, onLogout }) => {
   return (
     <div className="h-full w-full flex flex-col items-center justify-center p-6 bg-white overflow-y-auto">
       <div className="max-w-4xl w-full">
@@ -70,30 +69,19 @@ const FeatureSelector: React.FC<FeatureSelectorProps> = ({ onSelect, onLogout, o
           </button>
         </div>
 
-        <div className="mt-16 flex flex-col md:flex-row items-center justify-center gap-4 relative">
+        <div className="mt-16 flex justify-center relative">
            <div className="flex items-center gap-4 px-6 py-3 bg-slate-50 rounded-2xl border border-slate-100 text-[9px] font-orbitron font-black text-slate-400 uppercase tracking-widest">
               <Zap size={12} className="text-amber-500" /> BUS_PROTOCOL_v8.4_READY
            </div>
 
-           <div className="flex items-center gap-3">
-             {onResetMode && (
-               <button 
-                 onClick={onResetMode}
-                 className="flex items-center gap-2 px-6 py-3 bg-white border border-slate-200 rounded-2xl text-[9px] font-orbitron font-black text-indigo-600 uppercase tracking-widest hover:bg-indigo-50 hover:border-indigo-100 transition-all active:scale-95 shadow-sm"
-               >
-                 Switch Mode
-               </button>
-             )}
-
-             {onLogout && (
-               <button 
-                 onClick={onLogout}
-                 className="flex items-center gap-2 px-6 py-3 bg-white border border-slate-200 rounded-2xl text-[9px] font-orbitron font-black text-red-500 uppercase tracking-widest hover:bg-red-50 hover:border-red-100 transition-all active:scale-95 shadow-sm"
-               >
-                 <LogOut size={14} /> Logout
-               </button>
-             )}
-           </div>
+           {onLogout && (
+             <button 
+               onClick={onLogout}
+               className="absolute right-0 bottom-0 flex items-center gap-2 px-6 py-3 bg-white border border-slate-200 rounded-2xl text-[9px] font-orbitron font-black text-red-500 uppercase tracking-widest hover:bg-red-50 hover:border-red-100 transition-all active:scale-95 shadow-sm"
+             >
+               <LogOut size={14} /> Logout
+             </button>
+           )}
         </div>
       </div>
     </div>

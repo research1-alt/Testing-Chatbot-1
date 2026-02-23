@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { Zap, Cpu, Loader2, Bluetooth, Cable, AlertCircle, ShieldCheck, Wifi, WifiOff, Search, Monitor, Smartphone, HelpCircle, RefreshCcw, PlayCircle, Database, CheckCircle2 } from 'lucide-react';
+import { Zap, Cpu, Loader2, Bluetooth, Cable, Globe, AlertCircle, Settings, Info, ShieldCheck, Wifi, WifiOff, Search, Monitor, Smartphone, HelpCircle, RefreshCcw, Sliders, PlayCircle, Database, CheckCircle2 } from 'lucide-react';
 import { ConnectionStatus, HardwareStatus } from '../types.ts';
 
 interface ConnectionPanelProps {
@@ -96,7 +96,7 @@ const ConnectionPanel: React.FC<ConnectionPanelProps> = ({
                 <p className="text-[9px] md:text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-1">Hardware Interface</p>
               </div>
               <div className="flex items-center gap-2">
-                 {!btSupported && <AlertCircle size={12} className="text-red-400 animate-pulse" title="Bluetooth is not supported in this browser/system." />}
+                 {!btSupported && <Info size={12} className="text-red-400 animate-pulse" title="Bluetooth is not supported in this browser/system." />}
                  {isDesktop ? <Monitor size={14} className="text-slate-300" /> : <Smartphone size={14} className="text-slate-300" />}
               </div>
             </div>

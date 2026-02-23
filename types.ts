@@ -57,4 +57,3 @@ export interface SignalAnalysis {
 export type ConnectionStatus = 'disconnected' | 'connecting' | 'connected' | 'error';
 export type HardwareStatus = 'offline' | 'searching' | 'active' | 'fault';
 export type LoggingStatus = 'idle' | 'logging' | 'paused' | 'stopped';
-export type AppMode = 'mobile' | 'system';

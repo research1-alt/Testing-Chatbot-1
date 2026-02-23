@@ -104,7 +104,7 @@ const LibraryPanel: React.FC<LibraryPanelProps> = ({ library, onUpdateLibrary, l
             } disabled:opacity-30 disabled:cursor-not-allowed`}
           >
             {isSavingDecoded ? <Loader2 size={10} className="animate-spin" /> : <Save size={10} />}
-            {isSavingDecoded ? 'EXPORTING...' : 'EXPORT_CSV'}
+            {isSavingDecoded ? 'EXPORTING...' : 'SAVE_DECODED'}
           </button>
 
           <button

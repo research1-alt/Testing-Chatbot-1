@@ -91,7 +91,7 @@ const CANMonitor: React.FC<CANMonitorProps> = ({
             } disabled:opacity-30`}
           >
             {isSaving ? <Loader2 size={10} className="animate-spin" /> : <Save size={10} />}
-            <span className="hidden sm:inline">EXPORT</span>
+            <span className="hidden sm:inline">SAVE</span>
           </button>
 
           <button 

@@ -56,10 +56,6 @@ const OfflineDataVisualizer: React.FC<OfflineDataVisualizerProps> = ({
   const [activeSignalName, setActiveSignalName] = useState<string | null>(null);
   const [zoomedSignal, setZoomedSignal] = useState<string | null>(null);
 
-  // Graph Display Modes
-  const [lineType, setLineType] = useState<'linear' | 'stepAfter' | 'monotone'>('linear');
-  const [forceDots, setForceDots] = useState(false);
-
   // Layout & Control Modes
   const [liveSync, setLiveSync] = useState(false);
   const [controlMode, setControlMode] = useState<'select' | 'adjust'>('select');
@@ -116,8 +112,7 @@ const OfflineDataVisualizer: React.FC<OfflineDataVisualizerProps> = ({
   }, [library, searchTerm, latestFrames]);
 
   const plotData = useMemo(() => {
-    if (!selectedSignalNames || selectedSignalNames.length === 0 || frames.length === 0) return [];
-    
+    if (!selectedSignalNames || selectedSignalNames.length === 0) return [];
     const sigLookup = new Map<string, { normId: string; sig: DBCSignal }>();
     (Object.values(library?.database || {}) as DBCMessage[]).forEach(msg => {
       const dbe = (Object.entries(library?.database || {}) as [string, DBCMessage][]).find(([_, v]) => v === msg);
@@ -126,69 +121,26 @@ const OfflineDataVisualizer: React.FC<OfflineDataVisualizerProps> = ({
         if (selectedSignalNames.includes(s.name)) sigLookup.set(s.name, { normId, sig: s });
       });
     });
-
     const lkvMap: Record<string, number> = {};
     const processedPoints: any[] = [];
-    
-    // Determine visible range for intelligent decimation
-    const tMin = typeof left === 'number' ? left : -Infinity;
-    const tMax = typeof right === 'number' ? right : Infinity;
-    
-    // Find approximate start/end indices to avoid processing the whole array if possible
-    // For very large logs, this is crucial.
-    let startIdx = 0;
-    let endIdx = frames.length - 1;
-
-    // If we have a massive amount of data, binary search would be better, 
-    // but for now let's just find the range.
-    if (tMin !== -Infinity || tMax !== Infinity) {
-      // Find startIdx
-      for (let i = 0; i < frames.length; i++) {
-        if (frames[i].timestamp / 1000 >= tMin) {
-          startIdx = Math.max(0, i - 1);
-          break;
-        }
-      }
-      // Find endIdx
-      for (let i = frames.length - 1; i >= 0; i--) {
-        if (frames[i].timestamp / 1000 <= tMax) {
-          endIdx = Math.min(frames.length - 1, i + 1);
-          break;
-        }
-      }
-    }
-
-    const visibleCount = endIdx - startIdx + 1;
-    // We want enough points for clarity but not so many that it lags.
-    // 5000-8000 points is usually the sweet spot for Recharts.
-    const maxPoints = 8000;
-    const step = Math.max(1, Math.floor(visibleCount / maxPoints));
-
-    for (let i = startIdx; i <= endIdx; i += step) {
+    const step = Math.max(1, Math.floor(frames.length / 5000));
+    for (let i = 0; i < frames.length; i += step) {
       const f = frames[i];
       const fTime = f.timestamp / 1000;
       const fNormId = normalizeId(f.id.replace('0x', ''), true);
       let updated = false;
-      
       selectedSignalNames.forEach(sName => {
         const mapping = sigLookup.get(sName);
         if (mapping && mapping.normId === fNormId) {
           const valStr = decodeSignal(f.data, mapping.sig);
           const val = parseFloat(valStr.split(' ')[0]);
-          if (!isNaN(val)) { 
-            lkvMap[sName] = val; 
-            updated = true; 
-          }
+          if (!isNaN(val)) { lkvMap[sName] = val; updated = true; }
         }
       });
-
-      // Always include the first and last points of the range for visual continuity
-      if (updated || i === startIdx || i === endIdx) {
-        processedPoints.push({ time: fTime, ...lkvMap });
-      }
+      if (updated) processedPoints.push({ time: fTime, ...lkvMap });
     }
     return processedPoints;
-  }, [frames, selectedSignalNames, library, left, right]);
+  }, [frames, selectedSignalNames, library]);
 
   const statistics = useMemo(() => {
     if (selectedSignalNames.length === 0 || plotData.length === 0) return null;
@@ -315,37 +267,6 @@ const OfflineDataVisualizer: React.FC<OfflineDataVisualizerProps> = ({
           <span className="text-[8px] font-orbitron font-black text-slate-400 uppercase tracking-widest">{selectedSignalNames.length} Active Traces Allocated</span>
         </div>
         
-        <div className="flex items-center gap-2 border-r pr-4">
-          <button 
-            onClick={() => setLineType('linear')} 
-            className={`px-2 py-1 rounded border text-[9px] font-black transition-all ${lineType === 'linear' ? 'bg-slate-800 text-white border-slate-900 shadow-sm' : 'bg-white text-slate-400 border-slate-200 hover:text-slate-600'}`}
-            title="Linear Interpolation"
-          >
-            LIN
-          </button>
-          <button 
-            onClick={() => setLineType('stepAfter')} 
-            className={`px-2 py-1 rounded border text-[9px] font-black transition-all ${lineType === 'stepAfter' ? 'bg-slate-800 text-white border-slate-900 shadow-sm' : 'bg-white text-slate-400 border-slate-200 hover:text-slate-600'}`}
-            title="Step Mode (CAN Accurate)"
-          >
-            STEP
-          </button>
-          <button 
-            onClick={() => setLineType('monotone')} 
-            className={`px-2 py-1 rounded border text-[9px] font-black transition-all ${lineType === 'monotone' ? 'bg-slate-800 text-white border-slate-900 shadow-sm' : 'bg-white text-slate-400 border-slate-200 hover:text-slate-600'}`}
-            title="Monotone (Smooth)"
-          >
-            SMOOTH
-          </button>
-          <button 
-            onClick={() => setForceDots(!forceDots)} 
-            className={`p-1.5 rounded border transition-all ${forceDots ? 'bg-amber-500 text-white border-amber-600 shadow-sm' : 'bg-white text-slate-400 border-slate-200 hover:text-slate-600'}`}
-            title="Toggle Data Points"
-          >
-            <Hash size={14} />
-          </button>
-        </div>
-
         <div className="flex items-center gap-2">
           <button onClick={resetGraph} className="p-2 rounded border bg-white text-slate-400 hover:text-indigo-600 hover:border-indigo-200 transition-all active:scale-95" title="Reset View"><RefreshCw size={14}/></button>
           <button onClick={() => setControlMode('select')} className={`p-2 rounded border transition-colors ${controlMode === 'select' ? 'bg-indigo-600 text-white shadow-md' : 'bg-white text-slate-400 hover:text-indigo-600'}`}><MousePointer2 size={14}/></button>
@@ -453,22 +374,7 @@ const OfflineDataVisualizer: React.FC<OfflineDataVisualizerProps> = ({
                       <ResponsiveContainer width="100%" height="100%">
                         <LineChart data={plotData} onMouseDown={onChartMouseDown} onMouseMove={onChartMouseMove} onMouseUp={() => { handleZoom(); isPanning.current = false; }} margin={{ top: 10, right: 30, left: 40, bottom: 10 }}>
                           <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                          <XAxis 
-                            dataKey="time" 
-                            type="number" 
-                            domain={[left, right]} 
-                            allowDataOverflow 
-                            fontSize={10} 
-                            stroke="#cbd5e1" 
-                            tickFormatter={v => {
-                              const range = (typeof right === 'number' && typeof left === 'number') ? (right - left) : 100;
-                              if (range < 0.1) return v.toFixed(4);
-                              if (range < 1) return v.toFixed(3);
-                              if (range < 10) return v.toFixed(2);
-                              return v.toFixed(1);
-                            }} 
-                            hide={false} 
-                          />
+                          <XAxis dataKey="time" type="number" domain={[left, right]} allowDataOverflow fontSize={10} stroke="#cbd5e1" tickFormatter={v => `${v.toFixed(0)}`} hide={false} />
                           <YAxis 
                             fontSize={10} 
                             stroke={sigColor} 
@@ -480,16 +386,7 @@ const OfflineDataVisualizer: React.FC<OfflineDataVisualizerProps> = ({
                             <Label value={sName} angle={-90} position="insideLeft" style={{ textAnchor: 'middle', fontSize: '9px', fontWeight: 'bold', fill: sigColor }} offset={-20} />
                           </YAxis>
                           <Tooltip content={<CustomTooltip unit={activeSignalUnit} />} cursor={{ stroke: '#4f46e5', strokeWidth: 1, strokeDasharray: '4 4' }} />
-                          <Line 
-                            key={sName} 
-                            type={lineType} 
-                            dataKey={sName} 
-                            stroke={sigColor} 
-                            strokeWidth={isActive ? 2.5 : 1.5} 
-                            dot={(forceDots || plotData.length < 300) ? { r: 2, strokeWidth: 1, fill: sigColor } : false} 
-                            activeDot={{ r: 4, strokeWidth: 0, fill: '#4f46e5' }} 
-                            isAnimationActive={false}
-                          />
+                          <Line key={sName} type="monotone" dataKey={sName} stroke={sigColor} strokeWidth={isActive ? 2.5 : 1.5} dot={false} activeDot={{ r: 4, strokeWidth: 0, fill: '#4f46e5' }} />
                           {refAreaLeft !== null && refAreaRight !== null && <ReferenceArea x1={refAreaLeft} x2={refAreaRight} strokeOpacity={1} stroke="#eab308" fill="#4f46e5" fillOpacity={0.1} />}
                         </LineChart>
                       </ResponsiveContainer>
