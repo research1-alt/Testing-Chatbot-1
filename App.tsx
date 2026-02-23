@@ -62,6 +62,12 @@ const App: React.FC = () => {
   const [hwStatus, setHwStatus] = useState<HardwareStatus>('offline');
   const [hardwareId, setHardwareId] = useState<string | null>(null);
   const loggedHardwareRef = useRef<string | null>(null);
+
+  // Debug: Track state changes
+  useEffect(() => {
+    addDebugLog(`STATE_SYNC: Bridge=${bridgeStatus}, HW=${hwStatus}`);
+    console.log(`[APP_STATE] View: ${view}, Bridge: ${bridgeStatus}, HW: ${hwStatus}`);
+  }, [view, bridgeStatus, hwStatus]);
   const [deviceHistory, setDeviceHistory] = useState<string[]>(() => {
     const saved = localStorage.getItem('osm_deviceHistory');
     try { return saved ? JSON.parse(saved) : []; } catch { return []; }
@@ -370,13 +376,18 @@ const App: React.FC = () => {
       };
 
       (window as any).onNativeBleStatus = (status: ConnectionStatus, deviceName?: string) => {
+        addDebugLog(`NATIVE_CALLBACK: Status=${status}, Device=${deviceName || 'N/A'}`);
         setBridgeStatus(status);
         if (status === 'connected') {
           setHwStatus('active');
           if (deviceName) setHardwareId(deviceName);
           sessionStartTimeRef.current = performance.now();
           addDebugLog(`NATIVE_BLE: Connected to ${deviceName || 'Device'}. Requesting ID...`);
-          setTimeout(() => sendHardwareCommand("ID?"), 1000);
+          // Use a slightly longer delay to ensure React has finished re-rendering the view
+          setTimeout(() => {
+            addDebugLog("NATIVE_BLE: Sending ID? command...");
+            sendHardwareCommand("ID?");
+          }, 1500);
         } else if (status === 'disconnected' || status === 'error') {
           setHwStatus('offline');
           setHardwareId(null);
@@ -572,20 +583,25 @@ const App: React.FC = () => {
         let location = "Unknown";
         try {
           if ("geolocation" in navigator) {
+            addDebugLog("GEO: Requesting current position...");
             // Use a race to prevent hanging if geolocation is unresponsive
             const pos = await Promise.race([
               new Promise<GeolocationPosition>((resolve, reject) => {
                 navigator.geolocation.getCurrentPosition(resolve, reject, { 
-                  timeout: 4000, 
+                  timeout: 6000, 
                   enableHighAccuracy: false,
                   maximumAge: 60000 
                 });
               }),
-              new Promise<never>((_, reject) => setTimeout(() => reject(new Error("GEO_TIMEOUT")), 5000))
+              new Promise<never>((_, reject) => setTimeout(() => reject(new Error("GEO_TIMEOUT")), 7000))
             ]) as GeolocationPosition;
             location = `${pos.coords.latitude.toFixed(4)}, ${pos.coords.longitude.toFixed(4)}`;
+            addDebugLog(`GEO: Success - ${location}`);
+          } else {
+            addDebugLog("GEO: Not supported by browser.");
           }
-        } catch (e) {
+        } catch (e: any) {
+          addDebugLog(`GEO_ERROR: ${e.message || 'Unknown error'}`);
           location = "Permission Denied / Timeout";
         }
         
@@ -640,9 +656,17 @@ const App: React.FC = () => {
                 <ConnectionPanel 
                   status={bridgeStatus} hardwareMode={hardwareMode} 
                   onConnect={() => {
+                    if (bridgeStatus === 'connecting' || bridgeStatus === 'connected') {
+                      addDebugLog("LINK_GUARD: Connection already in progress or active.");
+                      return;
+                    }
                     loggedHardwareRef.current = null; // Reset log ref on every manual connect click
-                    if ((window as any).NativeBleBridge) (window as any).NativeBleBridge.startBleLink();
-                    else connectWebBluetooth();
+                    if ((window as any).NativeBleBridge) {
+                      addDebugLog("NATIVE_BLE: Triggering startBleLink...");
+                      (window as any).NativeBleBridge.startBleLink();
+                    } else {
+                      connectWebBluetooth();
+                    }
                   }} 
                   onDisconnect={disconnectHardware} 
                   onRequestHardwareId={() => sendHardwareCommand("ID?")}

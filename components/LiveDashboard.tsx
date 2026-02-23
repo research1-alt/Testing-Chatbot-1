@@ -57,12 +57,16 @@ const LiveDashboard: React.FC<LiveDashboardProps> = (props) => {
   return (
     <div className="h-full w-full flex flex-col bg-white overflow-hidden relative">
       {/* Header matching Data Decoder style */}
-      <header className="h-16 md:h-20 bg-white border-b flex items-center justify-between px-4 md:px-8 shrink-0 z-[110] shadow-sm">
+      <header className="safe-pt h-auto min-h-[64px] md:min-h-[80px] bg-white border-b flex items-center justify-between px-4 md:px-8 shrink-0 z-[110] shadow-sm">
         <button 
-          onClick={() => setIsMenuOpen(true)}
-          className="p-2 hover:bg-slate-100 rounded-xl transition-all active:scale-95 text-slate-600"
+          onClick={() => {
+            console.log("MENU_CLICKED");
+            setIsMenuOpen(true);
+          }}
+          className="p-4 -ml-4 hover:bg-slate-100 rounded-xl transition-all active:scale-95 text-slate-600 relative z-[150]"
+          aria-label="Open Menu"
         >
-          <Menu size={24} />
+          <Menu size={28} />
         </button>
 
         <div className="flex-1 flex flex-col items-center min-w-0">
