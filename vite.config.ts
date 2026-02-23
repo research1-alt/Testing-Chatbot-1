@@ -1,19 +1,29 @@
-import { defineConfig } from 'vite';
+
+import path from 'path';
+import { fileURLToPath } from 'url';
+import { defineConfig, loadEnv } from 'vite';
 import react from '@vitejs/plugin-react';
 
-export default defineConfig({
-  plugins: [react()],
-  define: {
-    // This explicitly tells Vite to replace 'process.env.API_KEY' in the code with the value found during build.
-    'process.env.API_KEY': JSON.stringify(process.env.API_KEY || "")
-  },
-  build: {
-    outDir: 'dist',
-    sourcemap: false,
-    rollupOptions: {
-      input: {
-        main: './index.html'
+// Fixing "Cannot find name '__dirname'" by defining it manually for the ESM environment
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+export default defineConfig(({ mode }) => {
+    const env = loadEnv(mode, '.', '');
+    return {
+      server: {
+        port: 3000,
+        host: '0.0.0.0',
+      },
+      plugins: [react()],
+      define: {
+        'process.env.API_KEY': JSON.stringify(env.GEMINI_API_KEY),
+        'process.env.GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY)
+      },
+      resolve: {
+        alias: {
+          '@': path.resolve(__dirname, '.'),
+        }
       }
-    }
-  }
+    };
 });

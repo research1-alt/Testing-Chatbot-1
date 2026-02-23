@@ -1,7 +1,9 @@
 {
-  "name": "Final OSM Inter_01",
-  "description": "An intelligent chatbot that reads troubleshooting data from a provided sheet and offers step-by-step solutions for OSM service interns in the field. Admins can load a knowledge base, and interns can query it using natural language.",
+  "name": "OSM LIVE SYSTEM",
+  "description": "Professional CAN-Bus monitoring and diagnostic HUD for OSM hardware. Supports real-time telemetry, trace analysis, and hardware identification.\n",
   "requestFramePermissions": [
-    "microphone"
+    "serial",
+    "bluetooth",
+    "geolocation"
   ]
 }

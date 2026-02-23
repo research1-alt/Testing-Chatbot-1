@@ -1,80 +1,120 @@
 
-import React, { useState, useCallback, useEffect, useRef } from 'react';
-import ChatWindow from './components/ChatWindow';
-import IntroPage from './components/IntroPage';
-import AuthPage from './components/AuthPage';
-import FileUpload from './components/FileUpload';
-import AdminDashboard from './components/AdminDashboard';
-import InstallPrompt from './components/InstallPrompt';
-import { ChatMessage } from './types';
-import { getChatbotResponse } from './services/geminiService';
-import { addFile, getAllFiles, StoredFile, deleteFile } from './utils/db';
-import { logUserQuery } from './services/otpService';
-import useAuth from './hooks/useAuth';
+import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
+import { Play, Pause, Cpu, ArrowLeft, Activity, Bluetooth, Zap, BarChart3, Database, LogOut, ExternalLink, LayoutDashboard, ShieldCheck, Settings2, Smartphone, Tablet, Monitor, LineChart as ChartIcon, Info, HelpCircle, AlertTriangle, Send, X, Menu } from 'lucide-react';
+import CANMonitor from '@/components/CANMonitor';
+import ConnectionPanel from '@/components/ConnectionPanel';
+import LibraryPanel from '@/components/LibraryPanel';
+import TraceAnalysisDashboard from '@/components/TraceAnalysisDashboard';
+import LiveVisualizerDashboard from '@/components/LiveVisualizerDashboard';
+import TransmitPanel from '@/components/TransmitPanel';
+import AuthScreen from '@/components/AuthScreen';
+import FeatureSelector from '@/components/FeatureSelector';
+import DataDecoder from '@/components/DataDecoder';
+import LiveDashboard from '@/components/LiveDashboard';
+import PWAInstallOverlay from '@/components/PWAInstallOverlay';
+import { CANFrame, ConnectionStatus, HardwareStatus, ConversionLibrary, SignalAnalysis, DBCMessage, DBCSignal, TransmitFrame } from '@/types';
+import { MY_CUSTOM_DBC, DEFAULT_LIBRARY_NAME } from '@/data/dbcProfiles';
+import { normalizeId, formatIdForDisplay, decodeSignal, cleanMessageName } from '@/utils/decoder';
+import { User, authService } from '@/services/authService';
+import { generateMockPacket } from '@/utils/canSim';
+import { analyzeCANData } from '@/services/geminiService';
 
-const ADMIN_EMAIL = 'research1@omegaseikimobility.com';
-const MASTER_SHEET_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQ9JdhdhfXumJA_tRoKVu6azf2hBAtQBec_QkRB4R_lNYv6jYwchV3vdzRWQTzAYqOLh24KwsKPQ2Ti/pub?gid=117585244&single=true&output=csv";
-const FEEDBACK_URL = 'https://forms.gle/YcrerYAazwxi5zXL7';
-const LOGO_URL = "https://ik.imagekit.io/m8gcj8knd/white%20(with%20background).png";
+const MAX_FRAME_LIMIT = 1000000; 
+const BATCH_UPDATE_INTERVAL = 60; 
+const STALE_SIGNAL_TIMEOUT = 5000; 
 
-const INDIAN_LANGUAGES = [
-    { code: 'en-US', name: 'English', native: 'English', flag: '🇬🇧' },
-    { code: 'hi-IN', name: 'Hindi', native: 'हिन्दी', flag: '🇮🇳' },
-    { code: 'mr-IN', name: 'Marathi', native: 'मराठी', flag: '🇮🇳' },
-    { code: 'ta-IN', name: 'Tamil', native: 'தமிழ்', flag: '🇮🇳' },
-    { code: 'te-IN', name: 'Telugu', native: 'తెలుగు', flag: '🇮🇳' },
-    { code: 'bn-IN', name: 'Bengali', native: 'বাংলা', flag: '🇮🇳' },
-    { code: 'gu-IN', name: 'Gujarati', native: 'ગુજરાતી', flag: '🇮🇳' },
-    { code: 'kn-IN', name: 'Kannada', native: 'ಕನ್ನಡ', flag: '🇮🇳' },
-    { code: 'ml-IN', name: 'Malayalam', native: 'മലയാളം', flag: '🇮🇳' },
-    { code: 'pa-IN', name: 'Punjabi', native: 'ਪੰਜਾਬੀ', flag: '🇮🇳' },
-    { code: 'ur-IN', name: 'Urdu', native: 'اردو', flag: '🇮🇳' },
-    { code: 'as-IN', name: 'Assamese', native: 'অসমীয়া', flag: '🇮🇳' },
-    { code: 'or-IN', name: 'Odia', native: 'ଓଡ଼ିଆ', flag: '🇮🇳' },
+// Common BLE UART Service UUIDs
+const UART_SERVICE_UUID = "6e400001-b5a3-f393-e0a9-e50e24dcca9e"; // Nordic NUS
+const HM10_SERVICE_UUID = "0000ffe0-0000-1000-8000-00805f9b34fb"; // HM-10
+const TX_CHAR_UUID = "6e400003-b5a3-f393-e0a9-e50e24dcca9e";
+const RX_CHAR_UUID = "6e400002-b5a3-f393-e0a9-e50e24dcca9e";
+
+const OPTIONAL_SERVICES = [
+  UART_SERVICE_UUID,
+  HM10_SERVICE_UUID,
+  "49535343-fe7d-4ae5-8fa9-9fafd205e455", // Microchip
+  "0000fefb-0000-1000-8000-00805f9b34fb"  // Telit
 ];
 
 const App: React.FC = () => {
-  const { 
-    user, view, setView, login, finalizeLogin, signup, commitSignup, 
-    logout, authError, isAuthLoading, getAllInterns, deleteIntern,
-    checkEmailExists, resetPassword
-  } = useAuth();
+  const [user, setUser] = useState<User | null>(() => {
+    const savedUser = localStorage.getItem('osm_currentUser');
+    try { return savedUser ? JSON.parse(savedUser) : null; } catch { return null; }
+  });
   
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [chatSessionKey, setChatSessionKey] = useState(0); 
-  const [isLoading, setIsLoading] = useState(false);
-  const [isRefreshing, setIsRefreshing] = useState(false);
-  const [isKbLoading, setIsKbLoading] = useState(false);
-  const [kbContent, setKbContent] = useState<string>('');
-  const [masterSheetContent, setMasterSheetContent] = useState<string>('');
-  const [kbFiles, setKbFiles] = useState<StoredFile[]>([]);
-  const [language, setLanguage] = useState('en-US');
-  const [showAdminPanel, setShowAdminPanel] = useState(false);
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  const [isLangSelectorOpen, setIsLangSelectorOpen] = useState(false);
-  const [syncStatus, setSyncStatus] = useState<'idle' | 'syncing' | 'success' | 'error'>('idle');
+  const [sessionId, setSessionId] = useState<string | null>(() => localStorage.getItem('osm_sid'));
+  
+  // Navigation
+  const [view, setView] = useState<'home' | 'select' | 'live' | 'decoder'>('home');
+  
+  const [hardwareMode, setHardwareMode] = useState<'esp32-serial' | 'esp32-bt'>('esp32-bt');
+  const [isSimulated, setIsSimulated] = useState(false);
+  const simulationIntervalRef = useRef<any>(null);
+  
+  const [frames, setFrames] = useState<CANFrame[]>([]);
+  const [latestFrames, setLatestFrames] = useState<Record<string, CANFrame>>({});
+  const [isPaused, setIsPaused] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [isSavingDecoded, setIsSavingDecoded] = useState(false);
+  const [autoSaveEnabled, setAutoSaveEnabled] = useState(false);
+  const hasTriggeredAutoSaveRef = useRef(false);
 
+  const [bridgeStatus, setBridgeStatus] = useState<ConnectionStatus>('disconnected');
+  const [hwStatus, setHwStatus] = useState<HardwareStatus>('offline');
+  const [hardwareId, setHardwareId] = useState<string | null>(null);
+  const loggedHardwareRef = useRef<string | null>(null);
+  const [deviceHistory, setDeviceHistory] = useState<string[]>(() => {
+    const saved = localStorage.getItem('osm_deviceHistory');
+    try { return saved ? JSON.parse(saved) : []; } catch { return []; }
+  });
+  const [baudRate, setBaudRate] = useState(115200);
+  const [debugLog, setDebugLog] = useState<string[]>([]);
+  
+  // PWA Install Prompt State
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
-  const [showInstallPrompt, setShowInstallPrompt] = useState(false);
+  const [showInstallOverlay, setShowInstallOverlay] = useState(false);
 
-  const isAdmin = user?.email.toLowerCase() === ADMIN_EMAIL.toLowerCase();
+  // Transmit States
+  const [activeSchedules, setActiveSchedules] = useState<Record<string, TransmitFrame>>({});
+  const schedulesRef = useRef<Record<string, any>>({});
 
-  const getInitialMessage = useCallback((): ChatMessage => ({
-    id: `welcome-${chatSessionKey}-${Date.now()}`,
-    text: `Welcome to the OSM Service Portal. I am your specialized AI Assistant. Ask me anything about vehicle troubleshooting, relay diagrams, or fault codes across all powertrain systems.`,
-    sender: 'bot',
-    timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-    suggestions: ["Matel Pin Position", "Virya Gen 2 Faults", "Relay Diagram"]
-  }), [chatSessionKey]);
+  // Persistent analysis states
+  const [analysisSelectedSignals, setAnalysisSelectedSignals] = useState<string[]>([]);
+  const [visualizerSelectedSignals, setVisualizerSelectedSignals] = useState<string[]>([]);
+  const [watcherActive, setWatcherActive] = useState(false);
+  const [lastAiAnalysis, setLastAiAnalysis] = useState<(SignalAnalysis & { isAutomatic?: boolean }) | null>(null);
+  const [aiLoading, setAiLoading] = useState(false);
+  
+  const [library, setLibrary] = useState<ConversionLibrary>({
+    id: 'default-pcan-lib',
+    name: DEFAULT_LIBRARY_NAME,
+    database: MY_CUSTOM_DBC,
+    lastUpdated: Date.now(),
+  });
 
+  const sessionStartTimeRef = useRef<number>(0);
+  const frameMapRef = useRef<Map<string, CANFrame>>(new Map());
+  const pendingFramesRef = useRef<CANFrame[]>([]);
+  const bleBufferRef = useRef<string>("");
+  const serialPortRef = useRef<any>(null);
+  const serialReaderRef = useRef<any>(null);
+  const serialWriterRef = useRef<any>(null);
+  const webBluetoothDeviceRef = useRef<any>(null);
+  const bleRxCharacteristicRef = useRef<any>(null);
+  const keepReadingRef = useRef(false);
+
+  const isAdmin = useMemo(() => user ? authService.isAdmin(user.email) : false, [user]);
+
+  // Listen for PWA install prompt
   useEffect(() => {
-    const handleBeforeInstallPrompt = (e: Event) => {
+    const handler = (e: any) => {
       e.preventDefault();
       setDeferredPrompt(e);
-      setShowInstallPrompt(true);
+      setTimeout(() => setShowInstallOverlay(true), 3000);
     };
-    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
-    return () => window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+
+    window.addEventListener('beforeinstallprompt', handler);
+    return () => window.removeEventListener('beforeinstallprompt', handler);
   }, []);
 
   const handleInstallClick = async () => {
@@ -82,321 +122,598 @@ const App: React.FC = () => {
     deferredPrompt.prompt();
     const { outcome } = await deferredPrompt.userChoice;
     setDeferredPrompt(null);
-    setShowInstallPrompt(false);
+    setShowInstallOverlay(false);
   };
 
-  const handleReloadApp = useCallback(() => {
-    setIsRefreshing(true);
-    setIsSidebarOpen(false);
-    setMessages([]);
-    setTimeout(() => {
-        setChatSessionKey(prev => prev + 1);
-        setIsRefreshing(false);
-        fetchMasterSheet();
-        loadKnowledgeBase();
-    }, 500);
+  const addDebugLog = useCallback((msg: string) => {
+    const time = new Date().toLocaleTimeString('en-GB', { hour12: false });
+    setDebugLog(prev => [`[${time}] ${msg}`, ...prev].slice(0, 50));
   }, []);
 
-  const handleLogoutAction = useCallback(() => {
-    setMessages([]);
-    setChatSessionKey(prev => prev + 1);
-    logout();
-  }, [logout]);
-
-  const handleFeedbackClick = () => {
-    window.open(FEEDBACK_URL, '_blank');
-    setIsSidebarOpen(false);
+  const startSimulation = () => {
+    if (!isAdmin) return;
+    setIsSimulated(true);
+    setBridgeStatus('connected');
+    setHwStatus('active');
+    setHardwareId('SIM-OSM-BT-01');
+    setFrames([]); 
+    setLatestFrames({}); 
+    frameMapRef.current.clear();
+    sessionStartTimeRef.current = performance.now();
+    
+    simulationIntervalRef.current = setInterval(() => {
+      if (isPaused) return;
+      const mockFrame = generateMockPacket(frameMapRef.current, sessionStartTimeRef.current);
+      frameMapRef.current.set(normalizeId(mockFrame.id.replace('0x', ''), true), mockFrame);
+      pendingFramesRef.current.push(mockFrame);
+    }, 50); // 20Hz Simulation
   };
 
-  const fetchMasterSheet = useCallback(async () => {
-    setSyncStatus('syncing');
+  const sendHardwareCommand = async (payload: string) => {
+    if (isSimulated) {
+      addDebugLog(`SIM_TX: ${payload}`);
+      return;
+    }
+    if (bridgeStatus !== 'connected') return;
     try {
-      const response = await fetch(MASTER_SHEET_URL);
-      if (!response.ok) throw new Error("Cloud access denied");
-      const csvData = await response.text();
-      setMasterSheetContent(csvData);
-      setSyncStatus('success');
-    } catch (err) {
-      console.error("OSM Sync Error:", err);
-      setSyncStatus('error');
+      if (hardwareMode === 'esp32-serial' && serialPortRef.current) {
+        if (!serialWriterRef.current) {
+          serialWriterRef.current = serialPortRef.current.writable.getWriter();
+        }
+        const encoder = new TextEncoder();
+        await serialWriterRef.current.write(encoder.encode(payload + "\n"));
+      } else if (hardwareMode === 'esp32-bt') {
+        if (bleRxCharacteristicRef.current) {
+          const encoder = new TextEncoder();
+          await bleRxCharacteristicRef.current.writeValue(encoder.encode(payload + "\n"));
+        } else if ((window as any).NativeBleBridge) {
+          (window as any).NativeBleBridge.sendData(payload + "\n");
+        }
+      }
+    } catch (e: any) {
+      addDebugLog(`TX_ERROR: ${e.message}`);
     }
-  }, []);
+  };
 
-  const loadKnowledgeBase = useCallback(async () => {
-    setIsKbLoading(true);
-    try {
-      let storedFiles = await getAllFiles();
-      setKbFiles(storedFiles);
-      const combined = storedFiles
-        .map(f => `FILE: ${f.name}\n---\n${f.content}\n---`)
-        .join('\n\n');
-      setKbContent(combined);
-    } catch (err) {
-      console.error("Local KB Error:", err);
-    } finally {
-      setIsKbLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    if (view === 'chat') {
-      fetchMasterSheet();
-      loadKnowledgeBase();
-    }
-  }, [view, loadKnowledgeBase, fetchMasterSheet]);
-
-  useEffect(() => {
-    if (view === 'chat' && !isRefreshing) {
-        setMessages([getInitialMessage()]);
-    }
-  }, [view, chatSessionKey, getInitialMessage, isRefreshing]);
-
-  const handleSendMessage = async (text: string) => {
-    if (!text.trim() || isLoading || isRefreshing) return;
-
-    const userMsg: ChatMessage = {
-      id: `u-${Date.now()}`,
-      text,
-      sender: 'user',
-      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+  const handleSendMessage = (id: string, dlc: number, data: string[]) => {
+    const payload = `TX#${id}#${dlc}#${data.join(',')}`;
+    sendHardwareCommand(payload);
+    const normId = normalizeId(id, true);
+    const newFrame: CANFrame = {
+      id: `0x${formatIdForDisplay(normId)}`,
+      dlc,
+      data: data.map(d => d.toUpperCase()),
+      timestamp: performance.now() - sessionStartTimeRef.current,
+      absoluteTimestamp: Date.now(),
+      direction: 'Tx',
+      count: 1,
+      periodMs: 0
     };
+    pendingFramesRef.current.push(newFrame);
+  };
 
-    setMessages(prev => [...prev, userMsg]);
-    setIsLoading(true);
+  const handleScheduleMessage = (frame: TransmitFrame) => {
+    setActiveSchedules(prev => ({ ...prev, [frame.id]: frame }));
+    if (schedulesRef.current[frame.id]) clearInterval(schedulesRef.current[frame.id]);
+    schedulesRef.current[frame.id] = setInterval(() => {
+      handleSendMessage(frame.id, frame.dlc, frame.data);
+    }, frame.periodMs);
+  };
 
+  const handleStopMessage = (id: string) => {
+    setActiveSchedules(prev => {
+      const next = { ...prev };
+      delete next[id];
+      return next;
+    });
+    if (schedulesRef.current[id]) {
+      clearInterval(schedulesRef.current[id]);
+      delete schedulesRef.current[id];
+    }
+  };
+
+  const exportFile = useCallback(async (data: string, fileName: string, mimeType: string = 'text/plain') => {
+    const android = (window as any).AndroidInterface;
+    if (android && android.saveFileWithPicker) {
+      android.saveFileWithPicker(data, fileName, mimeType);
+    } else if (android && android.saveFile) {
+      android.saveFile(data, fileName);
+    } else if ('showSaveFilePicker' in window) {
+      try {
+        const handle = await (window as any).showSaveFilePicker({
+          suggestedName: fileName,
+          types: [{ description: mimeType === 'text/plain' ? 'CAN Trace File' : 'Telemetry CSV', accept: { [mimeType]: [fileName.endsWith('.trc') ? '.trc' : '.csv'] } }],
+        });
+        const writable = await handle.createWritable();
+        await writable.write(data);
+        await writable.close();
+      } catch (e: any) {}
+    } else {
+      const blob = new Blob([data], { type: mimeType });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url; link.download = fileName;
+      document.body.appendChild(link);
+      link.click();
+      setTimeout(() => { document.body.removeChild(link); URL.revokeObjectURL(url); }, 100);
+    }
+  }, []);
+
+  const handleSaveTrace = useCallback(async (isAuto: boolean = false) => {
+    if (frames.length === 0) return;
+    if (!isAuto) setIsSaving(true);
+    setTimeout(async () => {
+      try {
+        const firstFrame = frames[0];
+        const startDate = new Date(firstFrame.absoluteTimestamp);
+        const excelSerialDate = (startDate.getTime() / (1000 * 60 * 60 * 24)) + 25569.0;
+        let content = ";$FILEVERSION=2.0\n";
+        content += `;$STARTTIME=${excelSerialDate.toFixed(10)}\n`;
+        content += ";$COLUMNS=N,O,T,I,d,l,D\n;\n";
+        const rows = frames.map((f, i) => {
+          const msgNum = (i + 1).toString().padStart(7, ' ');
+          const timeOffset = (f.timestamp).toFixed(3).padStart(13, ' ');
+          const id = f.id.replace('0x', '').toUpperCase().padStart(8, ' ');
+          const rxtx = f.direction.padStart(2, ' ');
+          const dlc = f.dlc.toString().padStart(1, ' ');
+          const dataBytes = f.data.map(d => d.padStart(2, '0').toUpperCase()).join(' ');
+          return `${msgNum} ${timeOffset} DT ${id} ${rxtx} ${dlc}  ${dataBytes}`;
+        });
+        content += rows.join('\n') + '\n';
+        const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+        await exportFile(content, `${isAuto ? 'AUTOSAVE_' : 'OSM_'}TRACE_${stamp}.trc`, 'text/plain');
+      } catch (e) { console.error(e); } finally { if (!isAuto) setIsSaving(false); }
+    }, 50);
+  }, [frames, exportFile]);
+  
+  const handleSaveDecoded = useCallback(async (isAuto: boolean = false) => {
+    if (frames.length === 0) return;
+    if (!isAuto) setIsSavingDecoded(true);
+    setTimeout(async () => {
+      try {
+        const idToDbcMap = new Map<string, DBCMessage>();
+        Object.entries(library.database).forEach(([decId, msg]) => idToDbcMap.set(normalizeId(decId), msg as DBCMessage));
+        const uniqueIdsInTrace = new Set<string>();
+        frames.slice(-50000).forEach(f => uniqueIdsInTrace.add(normalizeId(f.id.replace('0x', ''), true)));
+        const activeSignalMeta: any[] = [];
+        const msgIdToSignals: Record<string, string[]> = {};
+        uniqueIdsInTrace.forEach(normId => {
+          const msg = idToDbcMap.get(normId);
+          if (msg) {
+            msgIdToSignals[normId] = [];
+            Object.values(msg.signals).forEach((sig: any) => {
+              activeSignalMeta.push({ name: sig.name, msgId: normId, sig });
+              msgIdToSignals[normId].push(sig.name);
+            });
+          }
+        });
+        if (activeSignalMeta.length === 0) { if (!isAuto) setIsSavingDecoded(false); return; }
+        const header = ["timestamp_s", ...activeSignalMeta.map(s => `${s.name} [${s.sig.unit || 'raw'}]`)].join(",");
+        const csvRows: string[] = [header];
+        const lastKnownValues: Record<string, string> = {};
+        activeSignalMeta.forEach(s => lastKnownValues[s.name] = "0");
+        frames.slice(-50000).forEach((frame) => {
+          const frameNormId = normalizeId(frame.id.replace('0x', ''), true);
+          if (msgIdToSignals[frameNormId]) {
+            const dbEntry = idToDbcMap.get(frameNormId);
+            if (dbEntry) {
+              msgIdToSignals[frameNormId].forEach(sName => lastKnownValues[sName] = decodeSignal(frame.data, dbEntry.signals[sName]).split(' ')[0]);
+              csvRows.push([(frame.timestamp / 1000).toFixed(3), ...activeSignalMeta.map(s => lastKnownValues[s.name])].join(","));
+            }
+          }
+        });
+        const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+        await exportFile(csvRows.join("\n"), `${isAuto ? 'AUTOSAVE_' : 'OSM_'}DECODED_${stamp}.csv`, 'text/csv');
+      } catch (e) { console.error(e); } finally { if (!isAuto) setIsSavingDecoded(false); }
+    }, 50);
+  }, [frames, library, exportFile]);
+
+  const triggerAiAnalysis = async (isAuto = false) => {
+    if (frames.length === 0) return;
+    setAiLoading(true);
     try {
-      const history = messages
-        .slice(-6)
-        .map(m => `${m.sender === 'bot' ? 'Assistant' : 'Technician'}: ${m.text}`)
-        .join('\n');
+      const result = await analyzeCANData(frames, user || undefined, sessionId || undefined);
+      setLastAiAnalysis({ ...result, isAutomatic: isAuto });
+    } catch (e) { addDebugLog("AI_ERROR: Analysis failed."); } finally { setAiLoading(false); }
+  };
 
-      const fullContext = `[OSM MASTER DATABASE]\n${masterSheetContent}\n\n[ADMIN UPLOADED MANUALS]\n${kbContent}`;
-      const response = await getChatbotResponse(text, fullContext, history, language);
-      
-      const botMsg: ChatMessage = {
-        id: `b-${Date.now()}`,
-        text: response.answer,
-        sender: 'bot',
-        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        suggestions: response.suggestions,
-        unclear: response.isUnclear
+  const handleNewFrame = useCallback((id: string, dlc: number, data: string[]) => {
+    if (isPaused) return;
+    
+    // Handle System Messages
+    if (id.startsWith('SYS:')) {
+      if (id.includes('#')) {
+        const parts = id.split('#');
+        const hId = parts[parts.length - 1].trim();
+        if (hId && hId !== hardwareId) {
+          setHardwareId(hId);
+          setDeviceHistory(prev => {
+            if (prev.includes(hId)) return prev;
+            const next = [hId, ...prev].slice(0, 10);
+            localStorage.setItem('osm_deviceHistory', JSON.stringify(next));
+            return next;
+          });
+          addDebugLog(`HW_RECOGNIZED: ${hId}`);
+        }
+      }
+      return;
+    }
+
+    const normId = normalizeId(id, true);
+    if (!normId) return;
+    const prev = frameMapRef.current.get(normId);
+    const nowPerf = performance.now();
+    const newFrame: CANFrame = {
+      id: `0x${formatIdForDisplay(normId)}`, dlc,
+      data: data.map(d => d.toUpperCase().trim()), 
+      timestamp: nowPerf - sessionStartTimeRef.current,
+      absoluteTimestamp: Date.now(),
+      direction: 'Rx',
+      count: (prev?.count || 0) + 1,
+      periodMs: prev ? Math.round(nowPerf - (prev.timestamp + sessionStartTimeRef.current)) : 0
+    };
+    frameMapRef.current.set(normId, newFrame);
+    pendingFramesRef.current.push(newFrame);
+  }, [isPaused]);
+
+  // Native BLE Bridge Callbacks
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      (window as any).onNativeBleData = (data: string) => {
+        bleBufferRef.current += data;
+        if (bleBufferRef.current.includes('\n')) {
+          const lines = bleBufferRef.current.split('\n');
+          bleBufferRef.current = lines.pop() || "";
+          for (const line of lines) {
+            const trimmed = line.trim();
+            if (trimmed.startsWith('SYS:')) {
+              handleNewFrame(trimmed, 0, []);
+              continue;
+            }
+            const parts = trimmed.split('#');
+            if (parts.length >= 3) handleNewFrame(parts[0], parseInt(parts[1]), parts[2].split(','));
+          }
+        }
       };
 
-      setMessages(prev => [...prev, botMsg]);
+      (window as any).onNativeBleStatus = (status: ConnectionStatus, deviceName?: string) => {
+        setBridgeStatus(status);
+        if (status === 'connected') {
+          setHwStatus('active');
+          if (deviceName) setHardwareId(deviceName);
+          sessionStartTimeRef.current = performance.now();
+          addDebugLog(`NATIVE_BLE: Connected to ${deviceName || 'Device'}. Requesting ID...`);
+          setTimeout(() => sendHardwareCommand("ID?"), 1000);
+        } else if (status === 'disconnected' || status === 'error') {
+          setHwStatus('offline');
+          setHardwareId(null);
+          loggedHardwareRef.current = null;
+        }
+      };
 
-      if (user?.email) {
-          logUserQuery(user.email, user.name || 'Intern', text, user.sessionId, response.isUnclear, user.mobile).catch(e => {
-              console.warn("Cloud activity logging deferred.");
-          });
-      }
+      (window as any).onNativeBleLog = (msg: string) => addDebugLog(`NATIVE: ${msg}`);
+    }
+
+    return () => {
+      delete (window as any).onNativeBleData;
+      delete (window as any).onNativeBleStatus;
+      delete (window as any).onNativeBleLog;
+    };
+  }, [handleNewFrame, addDebugLog]);
+
+  const connectSerial = async () => {
+    if (!("serial" in navigator)) { setBridgeStatus('error'); return; }
+    try {
+      setBridgeStatus('connecting');
+      const port = await (navigator as any).serial.requestPort();
+      await port.open({ baudRate });
+      serialPortRef.current = port;
+      setFrames([]); setLatestFrames({}); frameMapRef.current.clear();
+      sessionStartTimeRef.current = performance.now();
+      setBridgeStatus('connected');
+      setHwStatus('active');
+      setHardwareId('SERIAL-DEVICE');
+      setIsSimulated(false);
       
-    } catch (err: any) {
-      setMessages(prev => [...prev, {
-        id: `err-${Date.now()}`,
-        text: `Error analyzing technical data: ${err.message}`,
-        sender: 'bot',
-        timestamp: new Date().toLocaleTimeString(),
-      }]);
-    } finally {
-      setIsLoading(false);
+      // Request ID from hardware
+      setTimeout(() => sendHardwareCommand("ID?"), 500);
+
+      keepReadingRef.current = true;
+      const decoder = new TextDecoder();
+      let buffer = "";
+      const reader = port.readable.getReader();
+      serialReaderRef.current = reader;
+      try {
+        while (keepReadingRef.current) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+          if (buffer.includes('\n')) {
+            const lines = buffer.split('\n');
+            buffer = lines.pop() || "";
+            for (const line of lines) {
+              const trimmed = line.trim();
+              if (trimmed.startsWith('SYS:')) {
+                handleNewFrame(trimmed, 0, []);
+                continue;
+              }
+              const parts = trimmed.split('#');
+              if (parts.length >= 3) handleNewFrame(parts[0], parseInt(parts[1]), parts[2].split(','));
+            }
+          }
+        }
+      } catch (e) {} finally { reader.releaseLock(); serialReaderRef.current = null; }
+    } catch (err: any) { setBridgeStatus('disconnected'); }
+  };
+
+  const connectWebBluetooth = async () => {
+    if (!(navigator as any).bluetooth) { 
+      setBridgeStatus('error'); 
+      addDebugLog("ERROR: Web Bluetooth not supported in this browser.");
+      return; 
+    }
+    try {
+      // Ensure previous device is cleared
+      if (webBluetoothDeviceRef.current) {
+        try {
+          if (webBluetoothDeviceRef.current.gatt.connected) {
+            await webBluetoothDeviceRef.current.gatt.disconnect();
+          }
+        } catch (e) {}
+        webBluetoothDeviceRef.current = null;
+      }
+
+      setBridgeStatus('connecting');
+      addDebugLog("BLE: Requesting device selector (Filtering for OSM hardware)...");
+      
+      // Prioritize OSM devices but allow others if needed
+      const device = await (navigator as any).bluetooth.requestDevice({ 
+        filters: [
+          { namePrefix: 'OSM' },
+          { namePrefix: 'CAN' },
+          { namePrefix: 'ESP32' }
+        ],
+        optionalServices: OPTIONAL_SERVICES 
+      }).catch(async (err: any) => {
+        // Fallback to all devices if the filter fails or user wants something else
+        if (err.name === 'NotFoundError') throw err;
+        addDebugLog("BLE: Filter failed, showing all devices...");
+        return await (navigator as any).bluetooth.requestDevice({ 
+          acceptAllDevices: true,
+          optionalServices: OPTIONAL_SERVICES 
+        });
+      });
+
+      addDebugLog(`BLE: Selected ${device.name || 'Unknown Device'}`);
+      webBluetoothDeviceRef.current = device;
+      device.addEventListener('gattserverdisconnected', () => { 
+        setBridgeStatus('disconnected'); 
+        setHwStatus('offline'); 
+        addDebugLog("BLE: Device disconnected.");
+      });
+      addDebugLog("BLE: Connecting to GATT Server...");
+      const server = await device.gatt.connect();
+      addDebugLog("BLE: GATT Connected. Discovering Service...");
+      await new Promise(r => setTimeout(r, 1000));
+      let service;
+      try {
+        service = await server.getPrimaryService(UART_SERVICE_UUID);
+      } catch (e) {
+        if (!device.gatt.connected) {
+          throw new Error("GATT_LOCK: Connection dropped by OS. Please UNPAIR the device from System Settings and try again.");
+        }
+        addDebugLog("ERROR: NUS Service not found. Attempting to list all services...");
+        const allServices = await server.getPrimaryServices();
+        allServices.forEach((s: any) => addDebugLog(` - Service: ${s.uuid}`));
+        throw new Error("Required UART Service not found on this device.");
+      }
+      addDebugLog("BLE: Service Found. Discovering Characteristics...");
+      let txChar;
+      try {
+        txChar = await service.getCharacteristic(TX_CHAR_UUID);
+      } catch (e) {
+        addDebugLog("WARN: TX Characteristic not found in NUS. Trying HM-10...");
+        if (service.uuid === HM10_SERVICE_UUID.toLowerCase()) {
+          txChar = await service.getCharacteristic("0000ffe1-0000-1000-8000-00805f9b34fb");
+        } else {
+          throw e;
+        }
+      }
+      addDebugLog("BLE: TX Characteristic Found. Starting Notifications...");
+      await txChar.startNotifications();
+      txChar.addEventListener('characteristicvaluechanged', (event: any) => {
+        const chunk = new TextDecoder().decode(event.target.value);
+        bleBufferRef.current += chunk;
+        if (bleBufferRef.current.includes('\n')) {
+          const lines = bleBufferRef.current.split('\n');
+          bleBufferRef.current = lines.pop() || "";
+          for (const line of lines) {
+            const trimmed = line.trim();
+            if (trimmed.startsWith('SYS:')) {
+              handleNewFrame(trimmed, 0, []);
+              continue;
+            }
+            const parts = trimmed.split('#');
+            if (parts.length >= 3) handleNewFrame(parts[0], parseInt(parts[1]), parts[2].split(','));
+          }
+        }
+      });
+      try { 
+        if (service.uuid === HM10_SERVICE_UUID.toLowerCase()) {
+          bleRxCharacteristicRef.current = await service.getCharacteristic("0000ffe1-0000-1000-8000-00805f9b34fb");
+        } else {
+          bleRxCharacteristicRef.current = await service.getCharacteristic(RX_CHAR_UUID); 
+        }
+        addDebugLog("BLE: RX Characteristic Found. Bi-directional link active.");
+      } catch (e) {
+        addDebugLog("BLE: RX Characteristic not found. Read-only mode.");
+      }
+      setFrames([]); setLatestFrames({}); frameMapRef.current.clear();
+      sessionStartTimeRef.current = performance.now();
+      setHardwareId(device.name || 'BT-DEVICE');
+      setBridgeStatus('connected'); setHwStatus('active'); setIsSimulated(false);
+      
+      // Request ID from hardware
+      setTimeout(() => sendHardwareCommand("ID?"), 500);
+    } catch (err: any) { 
+      addDebugLog(`BLE_ERROR: ${err.message}`);
+      setBridgeStatus('disconnected'); 
     }
   };
 
-  const handleFilesStored = async (newFiles: StoredFile[]) => {
-    for (const f of newFiles) await addFile(f);
-    await loadKnowledgeBase();
-  };
-
-  const handleDeleteFile = async (name: string) => {
-    if (confirm(`Remove manual "${name}"?`)) {
-        await deleteFile(name);
-        await loadKnowledgeBase();
+  const disconnectHardware = useCallback(async () => {
+    keepReadingRef.current = false;
+    setHardwareId(null);
+    loggedHardwareRef.current = null; // Clear log ref to allow re-logging on next connection
+    if (simulationIntervalRef.current) clearInterval(simulationIntervalRef.current);
+    Object.values(schedulesRef.current).forEach(clearInterval);
+    schedulesRef.current = {};
+    setActiveSchedules({});
+    if (serialWriterRef.current) { try { serialWriterRef.current.releaseLock(); } catch(e){} serialWriterRef.current = null; }
+    if (serialReaderRef.current) { try { await serialReaderRef.current.cancel(); } catch (e) {} }
+    if (serialPortRef.current) { try { await serialPortRef.current.close(); } catch (e) {} serialPortRef.current = null; }
+    if (webBluetoothDeviceRef.current?.gatt.connected) {
+      try {
+        await webBluetoothDeviceRef.current.gatt.disconnect();
+      } catch (e) {
+        console.warn("Error during disconnect:", e);
+      }
     }
+    webBluetoothDeviceRef.current = null;
+    if ((window as any).NativeBleBridge) (window as any).NativeBleBridge.disconnectBle();
+    setBridgeStatus('disconnected'); setHwStatus('offline'); setIsSimulated(false);
+  }, []);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (pendingFramesRef.current.length > 0) {
+        const batch = [...pendingFramesRef.current];
+        pendingFramesRef.current = [];
+        setFrames(prev => {
+          const next = [...prev, ...batch];
+          return next.length > MAX_FRAME_LIMIT ? next.slice(-MAX_FRAME_LIMIT) : next;
+        });
+        const latest: Record<string, CANFrame> = {};
+        batch.forEach(f => latest[normalizeId(f.id.replace('0x', ''), true)] = f);
+        setLatestFrames(prev => ({ ...prev, ...latest }));
+      }
+    }, BATCH_UPDATE_INTERVAL);
+    return () => clearInterval(interval);
+  }, []);
+
+  // Hardware Identification Logging
+  useEffect(() => {
+    if (hardwareId && user && sessionId && loggedHardwareRef.current !== hardwareId) {
+      loggedHardwareRef.current = hardwareId;
+      
+      const logHardware = async () => {
+        addDebugLog(`CLOUD_SYNC: Registering ${hardwareId}...`);
+        let location = "Unknown";
+        try {
+          if ("geolocation" in navigator) {
+            // Use a race to prevent hanging if geolocation is unresponsive
+            const pos = await Promise.race([
+              new Promise<GeolocationPosition>((resolve, reject) => {
+                navigator.geolocation.getCurrentPosition(resolve, reject, { 
+                  timeout: 4000, 
+                  enableHighAccuracy: false,
+                  maximumAge: 60000 
+                });
+              }),
+              new Promise<never>((_, reject) => setTimeout(() => reject(new Error("GEO_TIMEOUT")), 5000))
+            ]) as GeolocationPosition;
+            location = `${pos.coords.latitude.toFixed(4)}, ${pos.coords.longitude.toFixed(4)}`;
+          }
+        } catch (e) {
+          location = "Permission Denied / Timeout";
+        }
+        
+        try {
+          await authService.logHardwareIdentification(user, hardwareId, sessionId, location);
+          addDebugLog(`CLOUD_SYNC: ${hardwareId} logged successfully.`);
+        } catch (err) {
+          addDebugLog(`CLOUD_SYNC_ERROR: Failed to log hardware.`);
+        }
+      };
+      
+      logHardware();
+    }
+  }, [hardwareId, user, sessionId]);
+
+  const handleLogout = () => {
+    localStorage.removeItem('osm_currentUser');
+    localStorage.removeItem('osm_sid');
+    setUser(null);
+    setSessionId(null);
+    setView('home');
+    disconnectHardware();
   };
 
-  const handleLanguageSelect = (code: string) => {
-    setLanguage(code);
-    setIsLangSelectorOpen(false);
-    setIsSidebarOpen(false);
-  };
-
-  if (view === 'intro') return <IntroPage onStart={() => setView('auth')} logoUrl={LOGO_URL} />;
-  if (view === 'auth') return (
-    <AuthPage 
-      onLogin={login} 
-      onFinalizeLogin={finalizeLogin} 
-      onSignup={signup} 
-      commitSignup={commitSignup}
-      checkEmailExists={checkEmailExists}
-      resetPassword={resetPassword}
-      error={authError} 
-      isLoading={isAuthLoading}
-      logoUrl={LOGO_URL}
-    />
-  );
-
-  const selectedLang = INDIAN_LANGUAGES.find(l => l.code === language) || INDIAN_LANGUAGES[0];
+  if (!user) return <AuthScreen onAuthenticated={(u, s) => { localStorage.setItem('osm_currentUser', JSON.stringify(u)); localStorage.setItem('osm_sid', s); setUser(u); setSessionId(s); }} />;
 
   return (
-    <div className="flex flex-col h-full max-w-5xl mx-auto border-x bg-sky-50 shadow-2xl overflow-hidden font-sans text-slate-900 relative">
-      
-      {showInstallPrompt && (
-        <InstallPrompt 
-          onInstall={handleInstallClick} 
-          onDismiss={() => setShowInstallPrompt(false)} 
-        />
-      )}
+    <div className="h-full w-full font-inter flex flex-col min-h-0 overflow-hidden bg-white">
+      {showInstallOverlay && <PWAInstallOverlay onInstall={handleInstallClick} onDismiss={() => setShowInstallOverlay(false)} />}
 
-      {isRefreshing && (
-        <div className="fixed inset-0 z-[100] bg-sky-900 flex flex-col items-center justify-center text-white animate-in fade-in duration-300">
-           <div className="w-12 h-12 border-4 border-white border-t-transparent rounded-full animate-spin mb-4"></div>
-           <p className="text-[10px] font-black uppercase tracking-[0.3em] text-white">System Synchronizing...</p>
+      {view === 'home' ? (
+        <div className="flex-1 w-full flex flex-col items-center justify-center bg-white px-6 relative overflow-hidden">
+          <div className="bg-indigo-600 p-6 rounded-[32px] text-white shadow-2xl mb-12 animate-bounce"><Cpu size={64} /></div>
+          <h1 className="text-4xl md:text-8xl font-orbitron font-black text-slate-900 uppercase text-center">OSM <span className="text-indigo-600">LIVE</span></h1>
+          <button onClick={() => setView('select')} className="w-full max-w-xs mt-12 py-6 bg-indigo-600 text-white rounded-3xl font-orbitron font-black uppercase shadow-2xl transition-all active:scale-95">Launch HUD</button>
         </div>
-      )}
-
-      {/* Sidebar Overlay */}
-      <div className={`fixed inset-0 z-50 transition-all duration-500 ${isSidebarOpen ? 'visible' : 'invisible'}`}>
-        <div className={`absolute inset-0 bg-slate-900/40 backdrop-blur-md transition-opacity duration-500 ${isSidebarOpen ? 'opacity-100' : 'opacity-0'}`} onClick={() => { setIsSidebarOpen(false); setIsLangSelectorOpen(false); }}></div>
-        <aside className={`absolute top-0 left-0 h-full w-[70vw] sm:w-80 bg-white shadow-2xl transition-transform duration-500 transform ease-in-out ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'} overflow-hidden`}>
-          
-          {/* Main Sidebar Content */}
-          <div className={`p-8 h-full flex flex-col transition-transform duration-500 ${isLangSelectorOpen ? '-translate-x-full' : 'translate-x-0'}`}>
-            <div className="flex justify-between items-center mb-10 pt-safe">
-                <div className="flex flex-col">
-                    <img src={LOGO_URL} alt="OSM Logo" className="h-14 w-auto object-contain pr-4 select-none pointer-events-none" style={{ mixBlendMode: 'multiply' }} />
-                    <span className="text-[10px] font-black text-sky-400 uppercase tracking-widest mt-2">OSM Service Bot</span>
+      ) : view === 'select' ? (
+        <FeatureSelector onSelect={setView} onLogout={handleLogout} />
+      ) : view === 'decoder' ? (
+        <DataDecoder library={library} onExit={() => setView('select')} />
+      ) : (
+        /* LIVE HARDWARE SESSION */
+        <div className="flex-1 w-full flex flex-col overflow-hidden">
+          {bridgeStatus !== 'connected' ? (
+            <div className="h-full flex flex-col">
+              <header className="h-16 md:h-20 bg-white border-b flex items-center justify-between px-4 md:px-8 shrink-0 z-[110] shadow-sm">
+                <div className="p-2 text-slate-200"><Menu size={24} /></div> {/* Disabled Menu icon for consistency */}
+                <div className="flex-1 flex flex-col items-center min-w-0">
+                  <h2 className="text-[10px] md:text-[12px] font-orbitron font-black text-slate-400 uppercase tracking-[0.3em] truncate">HARDWARE_BRIDGE_TERMINAL</h2>
                 </div>
-                <button onClick={() => setIsSidebarOpen(false)} className="p-2 hover:bg-sky-50 rounded-full text-slate-400 transition-colors">
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" /></svg>
-                </button>
-            </div>
-
-            <nav className="flex-1 space-y-3 overflow-y-auto no-scrollbar">
-                <button onClick={() => { setShowAdminPanel(false); setIsSidebarOpen(false); }} className={`w-full flex items-center gap-4 px-6 py-4 rounded-3xl font-black text-[11px] uppercase tracking-widest transition-all ${!showAdminPanel ? 'bg-green-600 text-white shadow-lg' : 'hover:bg-sky-50 text-slate-600'}`}>
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" /></svg>
-                    Service Bot
-                </button>
-
-                {isAdmin && (
-                    <button onClick={() => { setShowAdminPanel(true); setIsSidebarOpen(false); }} className={`w-full flex items-center gap-4 px-6 py-4 rounded-3xl font-black text-[11px] uppercase tracking-widest transition-all ${showAdminPanel ? 'bg-green-600 text-white shadow-lg' : 'hover:bg-sky-50 text-slate-600'}`}>
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572-1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37a1.724 1.724 0 002.572-1.065z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
-                        Admin Dashboard
-                    </button>
-                )}
-
-                <button type="button" onClick={handleFeedbackClick} className="w-full flex items-center gap-4 px-6 py-4 rounded-3xl font-black text-[11px] uppercase tracking-widest text-slate-600 hover:bg-sky-50 transition-all border border-slate-100 active:bg-sky-100">
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z" /></svg>
-                    Send Feedback
-                </button>
-
-                <div className="py-2"></div>
-
-                <button onClick={() => setIsLangSelectorOpen(true)} className="w-full flex items-center justify-between px-6 py-5 rounded-3xl bg-sky-50 border border-sky-100 hover:bg-sky-100 transition-all">
-                    <div className="flex items-center gap-4">
-                        <div className="text-xl">{selectedLang.flag}</div>
-                        <div className="flex flex-col items-start">
-                            <span className="text-[10px] font-black text-sky-400 uppercase tracking-widest">Language</span>
-                            <span className="text-xs font-black text-slate-900">{selectedLang.name}</span>
-                        </div>
-                    </div>
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-sky-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" /></svg>
-                </button>
-            </nav>
-
-            <div className="pt-8 border-t border-slate-100 pb-safe">
-                <button onClick={handleLogoutAction} className="w-full flex items-center gap-4 px-6 py-4 rounded-3xl font-black text-[11px] uppercase tracking-widest text-red-500 hover:bg-red-50 transition-all">
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" /></svg>
-                    Logout Session
-                </button>
-            </div>
-          </div>
-
-          <div className={`absolute inset-0 p-8 flex flex-col transition-transform duration-500 bg-white pt-safe ${isLangSelectorOpen ? 'translate-x-0' : 'translate-x-full'}`}>
-            <div className="flex items-center gap-4 mb-8">
-                <button onClick={() => setIsLangSelectorOpen(false)} className="p-2 hover:bg-sky-50 rounded-full text-slate-400 transition-colors">
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 19l-7-7 7-7" /></svg>
-                </button>
-                <h2 className="text-xl font-black uppercase tracking-tighter text-slate-900">Choose Language</h2>
-            </div>
-            <div className="flex-1 overflow-y-auto no-scrollbar pb-safe">
-                <div className="grid grid-cols-2 gap-3 pb-8">
-                    {INDIAN_LANGUAGES.map((lang) => (
-                        <button key={lang.code} onClick={() => handleLanguageSelect(lang.code)} className={`flex flex-col items-center justify-center p-5 rounded-3xl transition-all border aspect-square ${language === lang.code ? 'bg-green-600 border-green-500 text-white shadow-xl scale-[1.05] z-10' : 'bg-sky-50 border-sky-100 text-slate-600 hover:bg-sky-100'}`}>
-                            <span className="text-3xl mb-3">{lang.flag}</span>
-                            <span className="text-[10px] font-black uppercase tracking-widest text-center">{lang.name}</span>
-                            <span className="text-[10px] font-bold opacity-60 mt-1">{lang.native}</span>
-                        </button>
-                    ))}
-                </div>
-            </div>
-          </div>
-
-        </aside>
-      </div>
-
-      <header className="bg-white/95 backdrop-blur-md text-slate-900 p-4 pt-[calc(1rem+env(safe-area-inset-top,0px))] flex justify-between items-center shadow-lg z-20 shrink-0 border-b border-sky-100">
-          <div className="flex items-center gap-4">
-            <button onClick={() => setIsSidebarOpen(true)} className="p-2.5 bg-sky-50 rounded-2xl text-slate-500 hover:text-sky-600 transition-all shadow-inner border border-sky-100 active:scale-95">
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M4 6h16M4 12h16M4 18h16" /></svg>
-            </button>
-            <div className="flex flex-col">
-              <img src={LOGO_URL} alt="OSM Logo" className="h-10 w-auto object-contain object-left pr-4 select-none pointer-events-none" style={{ mixBlendMode: 'multiply' }} />
-              <div className="flex items-center gap-2 mt-1">
-                <div className={`w-1.5 h-1.5 rounded-full ${syncStatus === 'success' ? 'bg-green-500' : syncStatus === 'error' ? 'bg-red-500' : 'bg-yellow-500 animate-pulse'}`}></div>
-                <p className="text-[8px] text-slate-400 font-black uppercase tracking-[0.2em]">
-                  {syncStatus === 'syncing' ? 'Syncing...' : 'Service Intern'}
-                </p>
+                <button onClick={() => setView('select')} className="p-2 hover:bg-slate-100 rounded-xl transition-all active:scale-95 text-slate-600"><X size={24} /></button>
+              </header>
+              <div className="flex-1 overflow-y-auto">
+                <ConnectionPanel 
+                  status={bridgeStatus} hardwareMode={hardwareMode} onSetHardwareMode={setHardwareMode} 
+                  onConnect={() => {
+                    loggedHardwareRef.current = null; // Reset log ref on every manual connect click
+                    if (hardwareMode === 'esp32-bt') {
+                      if ((window as any).NativeBleBridge) (window as any).NativeBleBridge.startBleLink();
+                      else connectWebBluetooth();
+                    } else {
+                      connectSerial();
+                    }
+                  }} 
+                  onDisconnect={disconnectHardware} 
+                  onRequestHardwareId={() => sendHardwareCommand("ID?")}
+                  debugLog={debugLog} 
+                  isAdmin={isAdmin} onStartSimulation={startSimulation}
+                  hardwareId={hardwareId}
+                  deviceHistory={deviceHistory}
+                />
               </div>
             </div>
-          </div>
-          
-          <div className="flex items-center gap-2">
-            <button 
-              onClick={handleReloadApp}
-              className="p-2.5 bg-sky-50 hover:bg-sky-100 active:bg-sky-200 border border-sky-100 rounded-full text-sky-600 transition-all shadow-sm group active:scale-90"
-              title="Refresh Application"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" className={`h-5 w-5 ${isRefreshing ? 'animate-spin' : 'group-hover:rotate-180 transition-transform duration-500'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-              </svg>
-            </button>
-            
-            <div className="flex items-center gap-3 pl-3 border-l border-sky-100">
-                <div className="w-10 h-10 rounded-2xl bg-sky-900 flex items-center justify-center font-black text-sm text-white shadow-xl border-2 border-white">
-                  {user?.name?.[0] || 'U'}
-                </div>
-            </div>
-          </div>
-      </header>
-
-      <main className="flex-1 overflow-hidden flex flex-col">
-        {showAdminPanel && isAdmin ? (
-          <div className="flex-1 flex flex-col relative overflow-hidden">
-            <AdminDashboard 
-              interns={getAllInterns()} 
-              onDeleteIntern={deleteIntern} 
-              kbFiles={kbFiles} 
-              onDeleteFile={handleDeleteFile} 
-              cloudData={masterSheetContent} 
+          ) : (
+            <LiveDashboard 
+              status={bridgeStatus} frames={frames} library={library} latestFrames={latestFrames} onDisconnect={disconnectHardware}
+              isSimulated={isSimulated}
+              onSendMessage={handleSendMessage} onScheduleMessage={handleScheduleMessage} onStopMessage={handleStopMessage} activeSchedules={activeSchedules}
+              isPaused={isPaused} isSaving={isSaving} autoSaveEnabled={autoSaveEnabled} onToggleAutoSave={() => setAutoSaveEnabled(!autoSaveEnabled)}
+              onClearTrace={() => { setFrames([]); hasTriggeredAutoSaveRef.current = false; }} onSaveTrace={() => handleSaveTrace(false)}
+              onSaveDecoded={() => handleSaveDecoded(false)} isSavingDecoded={isSavingDecoded}
+              selectedAnalysisSignals={analysisSelectedSignals} setSelectedAnalysisSignals={setAnalysisSelectedSignals}
+              selectedVisualizerSignals={visualizerSelectedSignals} setSelectedVisualizerSignals={setVisualizerSelectedSignals}
+              watcherActive={watcherActive} setWatcherActive={setWatcherActive} lastAiAnalysis={lastAiAnalysis} aiLoading={aiLoading}
+              onManualAnalyze={() => triggerAiAnalysis(false)}
             />
-            <div className="absolute bottom-0 left-0 right-0 p-4 bg-white/95 backdrop-blur-md border-t border-sky-100 shadow-[0_-10px_20px_rgba(0,0,0,0.05)] z-40 flex items-center justify-between pb-safe">
-                <FileUpload onFilesStored={handleFilesStored} onError={(msg) => alert(msg)} />
-                <span className="hidden xs:inline text-[9px] font-black uppercase text-sky-400 tracking-widest ml-4">Knowledge Base Manager</span>
-            </div>
-          </div>
-        ) : (
-          <ChatWindow 
-            key={`session-v${chatSessionKey}`} 
-            messages={messages} 
-            onSendMessage={handleSendMessage} 
-            isLoading={isLoading} 
-            isKbLoading={isKbLoading || syncStatus === 'syncing'} 
-            selectedLanguage={language} 
-            onOpenVideo={() => {}} 
-            showVideoAction={false} 
-          />
-        )}
-      </main>
+          )}
+        </div>
+      )}
     </div>
   );
 };
