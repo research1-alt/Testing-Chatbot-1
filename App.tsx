@@ -18,6 +18,8 @@ import { normalizeId, formatIdForDisplay, decodeSignal, cleanMessageName } from 
 import { User, authService } from '@/services/authService';
 import { generateMockPacket } from '@/utils/canSim';
 import { analyzeCANData } from '@/services/geminiService';
+import ModeSelector from '@/components/ModeSelector';
+import { AppMode } from '@/types';
 
 const MAX_FRAME_LIMIT = 1000000; 
 const BATCH_UPDATE_INTERVAL = 60; 
@@ -46,6 +48,9 @@ const App: React.FC = () => {
   
   // Navigation
   const [view, setView] = useState<'home' | 'select' | 'live' | 'decoder'>('home');
+  const [appMode, setAppMode] = useState<AppMode | null>(() => {
+    return localStorage.getItem('osm_appMode') as AppMode | null;
+  });
   
   const [hardwareMode, setHardwareMode] = useState<'esp32-serial' | 'esp32-bt'>('esp32-bt');
   const [isSimulated, setIsSimulated] = useState(false);
@@ -651,6 +656,13 @@ const App: React.FC = () => {
 
   if (!user) return <AuthScreen onAuthenticated={(u, s) => { localStorage.setItem('osm_currentUser', JSON.stringify(u)); localStorage.setItem('osm_sid', s); setUser(u); setSessionId(s); }} />;
 
+  if (!appMode) {
+    return <ModeSelector onSelect={(mode) => {
+      setAppMode(mode);
+      localStorage.setItem('osm_appMode', mode);
+    }} />;
+  }
+
   return (
     <div className="h-full w-full font-inter flex flex-col min-h-0 overflow-hidden bg-white">
       {showInstallOverlay && <PWAInstallOverlay onInstall={handleInstallClick} onDismiss={() => setShowInstallOverlay(false)} />}
@@ -662,7 +674,14 @@ const App: React.FC = () => {
           <button onClick={() => setView('select')} className="w-full max-w-xs mt-12 py-6 bg-indigo-600 text-white rounded-3xl font-orbitron font-black uppercase shadow-2xl transition-all active:scale-95">Launch HUD</button>
         </div>
       ) : view === 'select' ? (
-        <FeatureSelector onSelect={setView} onLogout={handleLogout} />
+        <FeatureSelector 
+          onSelect={setView} 
+          onLogout={handleLogout} 
+          onResetMode={() => {
+            setAppMode(null);
+            localStorage.removeItem('osm_appMode');
+          }} 
+        />
       ) : view === 'decoder' ? (
         <DataDecoder library={library} onExit={() => setView('select')} />
       ) : (
@@ -695,6 +714,7 @@ const App: React.FC = () => {
                   isAdmin={isAdmin} onStartSimulation={startSimulation}
                   hardwareId={hardwareId}
                   deviceHistory={deviceHistory}
+                  appMode={appMode}
                 />
               </div>
             </div>
@@ -710,6 +730,7 @@ const App: React.FC = () => {
               selectedVisualizerSignals={visualizerSelectedSignals} setSelectedVisualizerSignals={setVisualizerSelectedSignals}
               watcherActive={watcherActive} setWatcherActive={setWatcherActive} lastAiAnalysis={lastAiAnalysis} aiLoading={aiLoading}
               onManualAnalyze={() => triggerAiAnalysis(false)}
+              appMode={appMode}
             />
           )}
         </div>

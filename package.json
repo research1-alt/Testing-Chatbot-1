@@ -1,4 +1,3 @@
-
 {
   "name": "pcan-live-insight-dashboard",
   "private": true,
@@ -11,10 +10,11 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "react": "^19.2.3",
-    "react-dom": "^19.2.3",
     "@google/genai": "^1.34.0",
     "lucide-react": "^0.562.0",
+    "motion": "^12.34.3",
+    "react": "^19.2.3",
+    "react-dom": "^19.2.3",
     "recharts": "2.15.0"
   },
   "devDependencies": {

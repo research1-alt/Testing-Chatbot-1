@@ -1,6 +1,6 @@
 {
-  "name": "OSM LIVE SYSTEM",
-  "description": "Professional CAN-Bus monitoring and diagnostic HUD for OSM hardware. Supports real-time telemetry, trace analysis, and hardware identification.\n",
+  "name": "OSM Live: Multi-Mode HUD",
+  "description": "Professional CAN-Bus monitoring and diagnostic HUD with adaptive interfaces for Mobile and System views. Supports real-time telemetry, trace analysis, and hardware identification.",
   "requestFramePermissions": [
     "serial",
     "bluetooth",
