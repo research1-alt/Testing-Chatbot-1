@@ -112,7 +112,8 @@ const OfflineDataVisualizer: React.FC<OfflineDataVisualizerProps> = ({
   }, [library, searchTerm, latestFrames]);
 
   const plotData = useMemo(() => {
-    if (!selectedSignalNames || selectedSignalNames.length === 0) return [];
+    if (!selectedSignalNames || selectedSignalNames.length === 0 || frames.length === 0) return [];
+    
     const sigLookup = new Map<string, { normId: string; sig: DBCSignal }>();
     (Object.values(library?.database || {}) as DBCMessage[]).forEach(msg => {
       const dbe = (Object.entries(library?.database || {}) as [string, DBCMessage][]).find(([_, v]) => v === msg);
@@ -121,26 +122,49 @@ const OfflineDataVisualizer: React.FC<OfflineDataVisualizerProps> = ({
         if (selectedSignalNames.includes(s.name)) sigLookup.set(s.name, { normId, sig: s });
       });
     });
+
+    const visLeft = typeof left === 'number' ? left : (frames[0].timestamp / 1000);
+    const visRight = typeof right === 'number' ? right : (frames[frames.length - 1].timestamp / 1000);
+    
+    // Filter frames to visible range first
+    const visibleFrames = frames.filter(f => {
+      const t = f.timestamp / 1000;
+      return t >= visLeft && t <= visRight;
+    });
+
+    // Dynamic sampling: target ~8000 points for the visible area for performance + clarity
+    const targetPoints = 8000;
+    const step = Math.max(1, Math.floor(visibleFrames.length / targetPoints));
+    
     const lkvMap: Record<string, number> = {};
     const processedPoints: any[] = [];
-    const step = Math.max(1, Math.floor(frames.length / 5000));
-    for (let i = 0; i < frames.length; i += step) {
-      const f = frames[i];
+    
+    for (let i = 0; i < visibleFrames.length; i += step) {
+      const f = visibleFrames[i];
       const fTime = f.timestamp / 1000;
       const fNormId = normalizeId(f.id.replace('0x', ''), true);
       let updated = false;
+      
       selectedSignalNames.forEach(sName => {
         const mapping = sigLookup.get(sName);
         if (mapping && mapping.normId === fNormId) {
           const valStr = decodeSignal(f.data, mapping.sig);
           const val = parseFloat(valStr.split(' ')[0]);
-          if (!isNaN(val)) { lkvMap[sName] = val; updated = true; }
+          if (!isNaN(val)) { 
+            lkvMap[sName] = val; 
+            updated = true; 
+          }
         }
       });
-      if (updated) processedPoints.push({ time: fTime, ...lkvMap });
+      
+      // Always add points at the start/end of the visible range or if a signal updated
+      if (updated || i === 0 || i >= visibleFrames.length - step) {
+        processedPoints.push({ time: fTime, ...lkvMap });
+      }
     }
+    
     return processedPoints;
-  }, [frames, selectedSignalNames, library]);
+  }, [frames, selectedSignalNames, library, left, right]);
 
   const statistics = useMemo(() => {
     if (selectedSignalNames.length === 0 || plotData.length === 0) return null;
@@ -374,7 +398,22 @@ const OfflineDataVisualizer: React.FC<OfflineDataVisualizerProps> = ({
                       <ResponsiveContainer width="100%" height="100%">
                         <LineChart data={plotData} onMouseDown={onChartMouseDown} onMouseMove={onChartMouseMove} onMouseUp={() => { handleZoom(); isPanning.current = false; }} margin={{ top: 10, right: 30, left: 40, bottom: 10 }}>
                           <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                          <XAxis dataKey="time" type="number" domain={[left, right]} allowDataOverflow fontSize={10} stroke="#cbd5e1" tickFormatter={v => `${v.toFixed(0)}`} hide={false} />
+                          <XAxis 
+                            dataKey="time" 
+                            type="number" 
+                            domain={[left, right]} 
+                            allowDataOverflow 
+                            fontSize={10} 
+                            stroke="#cbd5e1" 
+                            tickFormatter={v => {
+                              const diff = Number(right) - Number(left);
+                              if (diff < 0.1) return v.toFixed(4);
+                              if (diff < 1) return v.toFixed(3);
+                              if (diff < 10) return v.toFixed(1);
+                              return v.toFixed(0);
+                            }} 
+                            hide={false} 
+                          />
                           <YAxis 
                             fontSize={10} 
                             stroke={sigColor} 
@@ -386,7 +425,16 @@ const OfflineDataVisualizer: React.FC<OfflineDataVisualizerProps> = ({
                             <Label value={sName} angle={-90} position="insideLeft" style={{ textAnchor: 'middle', fontSize: '9px', fontWeight: 'bold', fill: sigColor }} offset={-20} />
                           </YAxis>
                           <Tooltip content={<CustomTooltip unit={activeSignalUnit} />} cursor={{ stroke: '#4f46e5', strokeWidth: 1, strokeDasharray: '4 4' }} />
-                          <Line key={sName} type="monotone" dataKey={sName} stroke={sigColor} strokeWidth={isActive ? 2.5 : 1.5} dot={false} activeDot={{ r: 4, strokeWidth: 0, fill: '#4f46e5' }} />
+                          <Line 
+                            key={sName} 
+                            type="linear" 
+                            dataKey={sName} 
+                            stroke={sigColor} 
+                            strokeWidth={isActive ? 2.5 : 1.5} 
+                            dot={plotData.length < 300 ? { r: 2, strokeWidth: 1, fill: sigColor } : false} 
+                            activeDot={{ r: 4, strokeWidth: 0, fill: '#4f46e5' }} 
+                            isAnimationActive={false}
+                          />
                           {refAreaLeft !== null && refAreaRight !== null && <ReferenceArea x1={refAreaLeft} x2={refAreaRight} strokeOpacity={1} stroke="#eab308" fill="#4f46e5" fillOpacity={0.1} />}
                         </LineChart>
                       </ResponsiveContainer>

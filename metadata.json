@@ -1,5 +1,5 @@
 {
-  "name": "OSM LIVE SYSTEM",
+  "name": "Mobile OSM LIVE SYSTEM",
   "description": "Professional CAN-Bus monitoring and diagnostic HUD for OSM hardware. Supports real-time telemetry, trace analysis, and hardware identification.\n",
   "requestFramePermissions": [
     "serial",

@@ -6,8 +6,8 @@ import { ConnectionStatus, HardwareStatus } from '../types.ts';
 interface ConnectionPanelProps {
   status: ConnectionStatus;
   hwStatus?: HardwareStatus;
-  hardwareMode: 'esp32-serial' | 'esp32-bt';
-  onSetHardwareMode: (mode: 'esp32-serial' | 'esp32-bt') => void;
+  hardwareMode: 'esp32-bt';
+  onSetHardwareMode?: (mode: 'esp32-bt') => void;
   onConnect: () => void;
   onDisconnect: () => void;
   onRequestHardwareId?: () => void;
@@ -50,7 +50,7 @@ const ConnectionPanel: React.FC<ConnectionPanelProps> = ({
   const getStatusDetail = () => {
     if (status === 'connected') return {
       title: "LINK_ESTABLISHED",
-      desc: `Tactical bridge active via ${hardwareMode === 'esp32-bt' ? 'Bluetooth' : 'Serial'}. Telemetry stream is live.`,
+      desc: `Tactical bridge active via Bluetooth. Telemetry stream is live.`,
       icon: <Wifi className="text-emerald-500" size={24} />,
       color: "bg-emerald-50 border-emerald-100 text-emerald-700"
     };
@@ -101,20 +101,12 @@ const ConnectionPanel: React.FC<ConnectionPanelProps> = ({
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-3 md:gap-4 mb-6 md:mb-8">
-              <button 
-                onClick={() => onSetHardwareMode('esp32-serial')} 
-                className={`flex flex-col items-center gap-3 p-4 md:p-5 rounded-[24px] border transition-all ${hardwareMode === 'esp32-serial' ? 'bg-indigo-600 border-indigo-700 text-white shadow-xl' : 'bg-slate-50 border-slate-100 text-slate-400 hover:bg-slate-100'}`}
-              >
-                <Cable size={20}/><span className="text-[8px] font-orbitron font-black uppercase">Wired (USB)</span>
-              </button>
-              <button 
-                onClick={() => btSupported && onSetHardwareMode('esp32-bt')} 
-                disabled={!btSupported}
-                className={`flex flex-col items-center gap-3 p-4 md:p-5 rounded-[24px] border transition-all ${!btSupported ? 'opacity-40 cursor-not-allowed grayscale' : ''} ${hardwareMode === 'esp32-bt' ? 'bg-indigo-600 border-indigo-700 text-white shadow-xl' : 'bg-slate-50 border-slate-100 text-slate-400 hover:bg-slate-100'}`}
+            <div className="flex justify-center mb-6 md:mb-8">
+              <div 
+                className={`flex flex-col items-center gap-3 p-4 md:p-5 rounded-[24px] border transition-all w-full max-w-[200px] ${!btSupported ? 'opacity-40 cursor-not-allowed grayscale' : 'bg-indigo-600 border-indigo-700 text-white shadow-xl'}`}
               >
                 <Bluetooth size={20}/><span className="text-[8px] font-orbitron font-black uppercase">{btSupported ? 'Bluetooth' : 'BT_NOT_SUPPORTED'}</span>
-              </button>
+              </div>
             </div>
 
             <div className={`mb-6 p-5 md:p-6 rounded-[32px] border transition-all duration-500 shadow-inner ${currentStatus.color}`}>
@@ -207,12 +199,6 @@ const ConnectionPanel: React.FC<ConnectionPanelProps> = ({
                 <div className="mt-4 space-y-3 bg-slate-50 p-5 rounded-3xl border border-slate-100 animate-in slide-in-from-top-2">
                   <div className="flex gap-3">
                     <div className="text-[9px] font-orbitron font-black text-indigo-600 bg-white w-5 h-5 flex items-center justify-center rounded-lg shadow-sm shrink-0">1</div>
-                    <p className="text-[10px] text-slate-600 font-medium leading-snug">
-                      <b>Desktop/Laptop Users:</b> Use the <b>Wired (USB)</b> mode for 100% reliability. The default baud rate is locked to 115200.
-                    </p>
-                  </div>
-                  <div className="flex gap-3">
-                    <div className="text-[9px] font-orbitron font-black text-indigo-600 bg-white w-5 h-5 flex items-center justify-center rounded-lg shadow-sm shrink-0">2</div>
                     <p className="text-[10px] text-slate-600 font-medium leading-snug">
                       <b>Bluetooth Troubleshooting:</b> If device is invisible, go to System Settings and <b>Unpair/Forget</b> it. Then restart the ESP32.
                     </p>

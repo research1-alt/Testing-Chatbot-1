@@ -9,7 +9,6 @@ import LiveVisualizerDashboard from '@/components/LiveVisualizerDashboard';
 import TransmitPanel from '@/components/TransmitPanel';
 import AuthScreen from '@/components/AuthScreen';
 import FeatureSelector from '@/components/FeatureSelector';
-import DataDecoder from '@/components/DataDecoder';
 import LiveDashboard from '@/components/LiveDashboard';
 import PWAInstallOverlay from '@/components/PWAInstallOverlay';
 import { CANFrame, ConnectionStatus, HardwareStatus, ConversionLibrary, SignalAnalysis, DBCMessage, DBCSignal, TransmitFrame } from '@/types';
@@ -45,9 +44,9 @@ const App: React.FC = () => {
   const [sessionId, setSessionId] = useState<string | null>(() => localStorage.getItem('osm_sid'));
   
   // Navigation
-  const [view, setView] = useState<'home' | 'select' | 'live' | 'decoder'>('home');
+  const [view, setView] = useState<'home' | 'select' | 'live'>('home');
   
-  const [hardwareMode, setHardwareMode] = useState<'esp32-serial' | 'esp32-bt'>('esp32-bt');
+  const [hardwareMode, setHardwareMode] = useState<'esp32-bt'>('esp32-bt');
   const [isSimulated, setIsSimulated] = useState(false);
   const simulationIntervalRef = useRef<any>(null);
   
@@ -156,13 +155,7 @@ const App: React.FC = () => {
     }
     if (bridgeStatus !== 'connected') return;
     try {
-      if (hardwareMode === 'esp32-serial' && serialPortRef.current) {
-        if (!serialWriterRef.current) {
-          serialWriterRef.current = serialPortRef.current.writable.getWriter();
-        }
-        const encoder = new TextEncoder();
-        await serialWriterRef.current.write(encoder.encode(payload + "\n"));
-      } else if (hardwareMode === 'esp32-bt') {
+      if (hardwareMode === 'esp32-bt') {
         if (bleRxCharacteristicRef.current) {
           const encoder = new TextEncoder();
           await bleRxCharacteristicRef.current.writeValue(encoder.encode(payload + "\n"));
@@ -401,51 +394,6 @@ const App: React.FC = () => {
     };
   }, [handleNewFrame, addDebugLog]);
 
-  const connectSerial = async () => {
-    if (!("serial" in navigator)) { setBridgeStatus('error'); return; }
-    try {
-      setBridgeStatus('connecting');
-      const port = await (navigator as any).serial.requestPort();
-      await port.open({ baudRate });
-      serialPortRef.current = port;
-      setFrames([]); setLatestFrames({}); frameMapRef.current.clear();
-      sessionStartTimeRef.current = performance.now();
-      setBridgeStatus('connected');
-      setHwStatus('active');
-      setHardwareId('SERIAL-DEVICE');
-      setIsSimulated(false);
-      
-      // Request ID from hardware
-      setTimeout(() => sendHardwareCommand("ID?"), 500);
-
-      keepReadingRef.current = true;
-      const decoder = new TextDecoder();
-      let buffer = "";
-      const reader = port.readable.getReader();
-      serialReaderRef.current = reader;
-      try {
-        while (keepReadingRef.current) {
-          const { value, done } = await reader.read();
-          if (done) break;
-          buffer += decoder.decode(value, { stream: true });
-          if (buffer.includes('\n')) {
-            const lines = buffer.split('\n');
-            buffer = lines.pop() || "";
-            for (const line of lines) {
-              const trimmed = line.trim();
-              if (trimmed.startsWith('SYS:')) {
-                handleNewFrame(trimmed, 0, []);
-                continue;
-              }
-              const parts = trimmed.split('#');
-              if (parts.length >= 3) handleNewFrame(parts[0], parseInt(parts[1]), parts[2].split(','));
-            }
-          }
-        }
-      } catch (e) {} finally { reader.releaseLock(); serialReaderRef.current = null; }
-    } catch (err: any) { setBridgeStatus('disconnected'); }
-  };
-
   const connectWebBluetooth = async () => {
     if (!(navigator as any).bluetooth) { 
       setBridgeStatus('error'); 
@@ -663,8 +611,6 @@ const App: React.FC = () => {
         </div>
       ) : view === 'select' ? (
         <FeatureSelector onSelect={setView} onLogout={handleLogout} />
-      ) : view === 'decoder' ? (
-        <DataDecoder library={library} onExit={() => setView('select')} />
       ) : (
         /* LIVE HARDWARE SESSION */
         <div className="flex-1 w-full flex flex-col overflow-hidden">
@@ -679,15 +625,11 @@ const App: React.FC = () => {
               </header>
               <div className="flex-1 overflow-y-auto">
                 <ConnectionPanel 
-                  status={bridgeStatus} hardwareMode={hardwareMode} onSetHardwareMode={setHardwareMode} 
+                  status={bridgeStatus} hardwareMode={hardwareMode} 
                   onConnect={() => {
                     loggedHardwareRef.current = null; // Reset log ref on every manual connect click
-                    if (hardwareMode === 'esp32-bt') {
-                      if ((window as any).NativeBleBridge) (window as any).NativeBleBridge.startBleLink();
-                      else connectWebBluetooth();
-                    } else {
-                      connectSerial();
-                    }
+                    if ((window as any).NativeBleBridge) (window as any).NativeBleBridge.startBleLink();
+                    else connectWebBluetooth();
                   }} 
                   onDisconnect={disconnectHardware} 
                   onRequestHardwareId={() => sendHardwareCommand("ID?")}
