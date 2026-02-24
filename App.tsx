@@ -4,19 +4,16 @@ import { Play, Pause, Cpu, ArrowLeft, Activity, Bluetooth, Zap, BarChart3, Datab
 import CANMonitor from '@/components/CANMonitor';
 import ConnectionPanel from '@/components/ConnectionPanel';
 import LibraryPanel from '@/components/LibraryPanel';
-import TraceAnalysisDashboard from '@/components/TraceAnalysisDashboard';
-import LiveVisualizerDashboard from '@/components/LiveVisualizerDashboard';
 import TransmitPanel from '@/components/TransmitPanel';
 import AuthScreen from '@/components/AuthScreen';
 import FeatureSelector from '@/components/FeatureSelector';
 import LiveDashboard from '@/components/LiveDashboard';
 import PWAInstallOverlay from '@/components/PWAInstallOverlay';
-import { CANFrame, ConnectionStatus, HardwareStatus, ConversionLibrary, SignalAnalysis, DBCMessage, DBCSignal, TransmitFrame } from '@/types';
+import { CANFrame, ConnectionStatus, HardwareStatus, ConversionLibrary, DBCMessage, DBCSignal, TransmitFrame } from '@/types';
 import { MY_CUSTOM_DBC, DEFAULT_LIBRARY_NAME } from '@/data/dbcProfiles';
 import { normalizeId, formatIdForDisplay, decodeSignal, cleanMessageName } from '@/utils/decoder';
 import { User, authService } from '@/services/authService';
 import { generateMockPacket } from '@/utils/canSim';
-import { analyzeCANData } from '@/services/geminiService';
 
 const MAX_FRAME_LIMIT = 1000000; 
 const BATCH_UPDATE_INTERVAL = 60; 
@@ -83,13 +80,6 @@ const App: React.FC = () => {
   const [activeSchedules, setActiveSchedules] = useState<Record<string, TransmitFrame>>({});
   const schedulesRef = useRef<Record<string, any>>({});
 
-  // Persistent analysis states
-  const [analysisSelectedSignals, setAnalysisSelectedSignals] = useState<string[]>([]);
-  const [visualizerSelectedSignals, setVisualizerSelectedSignals] = useState<string[]>([]);
-  const [watcherActive, setWatcherActive] = useState(false);
-  const [lastAiAnalysis, setLastAiAnalysis] = useState<(SignalAnalysis & { isAutomatic?: boolean }) | null>(null);
-  const [aiLoading, setAiLoading] = useState(false);
-  
   const [library, setLibrary] = useState<ConversionLibrary>({
     id: 'default-pcan-lib',
     name: DEFAULT_LIBRARY_NAME,
@@ -306,15 +296,6 @@ const App: React.FC = () => {
       } catch (e) { console.error(e); } finally { if (!isAuto) setIsSavingDecoded(false); }
     }, 50);
   }, [frames, library, exportFile]);
-
-  const triggerAiAnalysis = async (isAuto = false) => {
-    if (frames.length === 0) return;
-    setAiLoading(true);
-    try {
-      const result = await analyzeCANData(frames, user || undefined, sessionId || undefined);
-      setLastAiAnalysis({ ...result, isAutomatic: isAuto });
-    } catch (e) { addDebugLog("AI_ERROR: Analysis failed."); } finally { setAiLoading(false); }
-  };
 
   const handleNewFrame = useCallback((id: string, dlc: number, data: string[]) => {
     if (isPaused) return;
@@ -648,7 +629,7 @@ const App: React.FC = () => {
               <header className="h-16 md:h-20 bg-white border-b flex items-center justify-between px-4 md:px-8 shrink-0 z-[110] shadow-sm">
                 <div className="p-2 text-slate-200"><Menu size={24} /></div> {/* Disabled Menu icon for consistency */}
                 <div className="flex-1 flex flex-col items-center min-w-0">
-                  <h2 className="text-[10px] md:text-[12px] font-orbitron font-black text-slate-400 uppercase tracking-[0.3em] truncate">HARDWARE_BRIDGE_TERMINAL</h2>
+                  <h2 className="text-[10px] md:text-[12px] font-orbitron font-black text-slate-400 uppercase tracking-[0.1em] truncate">HARDWARE_BRIDGE_TERMINAL</h2>
                 </div>
                 <button onClick={() => setView('select')} className="p-2 hover:bg-slate-100 rounded-xl transition-all active:scale-95 text-slate-600"><X size={24} /></button>
               </header>
@@ -685,10 +666,6 @@ const App: React.FC = () => {
               isPaused={isPaused} isSaving={isSaving} autoSaveEnabled={autoSaveEnabled} onToggleAutoSave={() => setAutoSaveEnabled(!autoSaveEnabled)}
               onClearTrace={() => { setFrames([]); hasTriggeredAutoSaveRef.current = false; }} onSaveTrace={() => handleSaveTrace(false)}
               onSaveDecoded={() => handleSaveDecoded(false)} isSavingDecoded={isSavingDecoded}
-              selectedAnalysisSignals={analysisSelectedSignals} setSelectedAnalysisSignals={setAnalysisSelectedSignals}
-              selectedVisualizerSignals={visualizerSelectedSignals} setSelectedVisualizerSignals={setVisualizerSelectedSignals}
-              watcherActive={watcherActive} setWatcherActive={setWatcherActive} lastAiAnalysis={lastAiAnalysis} aiLoading={aiLoading}
-              onManualAnalyze={() => triggerAiAnalysis(false)}
             />
           )}
         </div>

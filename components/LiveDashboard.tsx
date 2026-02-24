@@ -1,12 +1,10 @@
 
 import React, { useState, useRef, useEffect } from 'react';
-import { Menu, X, Bluetooth, Zap, LayoutDashboard, Database, Send, BarChart3, Activity, ArrowLeft, ShieldCheck, Settings2, Smartphone, Cpu, PlayCircle } from 'lucide-react';
-import { CANFrame, ConnectionStatus, ConversionLibrary, SignalAnalysis, TransmitFrame } from '../types.ts';
+import { Menu, X, Bluetooth, Zap, LayoutDashboard, Database, Send, ArrowLeft, ShieldCheck, Settings2, Smartphone, Cpu, PlayCircle } from 'lucide-react';
+import { CANFrame, ConnectionStatus, ConversionLibrary, TransmitFrame } from '../types.ts';
 import CANMonitor from './CANMonitor.tsx';
 import LibraryPanel from './LibraryPanel.tsx';
 import TransmitPanel from './TransmitPanel.tsx';
-import LiveVisualizerDashboard from './LiveVisualizerDashboard.tsx';
-import TraceAnalysisDashboard from './TraceAnalysisDashboard.tsx';
 
 interface LiveDashboardProps {
   status: ConnectionStatus;
@@ -30,28 +28,16 @@ interface LiveDashboardProps {
   // State for Decoded Data
   onSaveDecoded: () => void;
   isSavingDecoded: boolean;
-  // Analysis Props
-  selectedAnalysisSignals: string[];
-  setSelectedAnalysisSignals: React.Dispatch<React.SetStateAction<string[]>>;
-  selectedVisualizerSignals: string[];
-  setSelectedVisualizerSignals: React.Dispatch<React.SetStateAction<string[]>>;
-  watcherActive: boolean;
-  setWatcherActive: React.Dispatch<React.SetStateAction<boolean>>;
-  lastAiAnalysis: (SignalAnalysis & { isAutomatic?: boolean }) | null;
-  aiLoading: boolean;
-  onManualAnalyze: () => void;
 }
 
 const LiveDashboard: React.FC<LiveDashboardProps> = (props) => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const [tab, setTab] = useState<'trace' | 'data' | 'tx_tool' | 'visualizer' | 'analysis'>('trace');
+  const [tab, setTab] = useState<'trace' | 'data' | 'tx_tool'>('trace');
 
   const menuItems = [
     { id: 'trace', label: 'Live Trace', icon: LayoutDashboard },
     { id: 'data', label: 'Data', icon: Database },
     { id: 'tx_tool', label: 'TX Tool', icon: Send },
-    { id: 'visualizer', label: 'Visualizer', icon: Activity },
-    { id: 'analysis', label: 'Analysis', icon: BarChart3 },
   ];
 
   return (
@@ -162,31 +148,6 @@ const LiveDashboard: React.FC<LiveDashboardProps> = (props) => {
             onScheduleMessage={props.onScheduleMessage}
             onStopMessage={props.onStopMessage}
             activeSchedules={props.activeSchedules}
-          />
-        )}
-
-        {tab === 'visualizer' && (
-          <LiveVisualizerDashboard 
-            frames={props.frames}
-            library={props.library}
-            latestFrames={props.latestFrames}
-            selectedSignalNames={props.selectedVisualizerSignals}
-            setSelectedSignalNames={props.setSelectedVisualizerSignals}
-          />
-        )}
-
-        {tab === 'analysis' && (
-          <TraceAnalysisDashboard 
-            frames={props.frames}
-            library={props.library}
-            latestFrames={props.latestFrames}
-            selectedSignalNames={props.selectedAnalysisSignals}
-            setSelectedSignalNames={props.setSelectedAnalysisSignals}
-            watcherActive={props.watcherActive}
-            setWatcherActive={props.setWatcherActive}
-            lastAiAnalysis={props.lastAiAnalysis}
-            aiLoading={props.aiLoading}
-            onManualAnalyze={props.onManualAnalyze}
           />
         )}
       </main>

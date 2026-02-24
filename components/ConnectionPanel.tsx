@@ -52,19 +52,13 @@ const ConnectionPanel: React.FC<ConnectionPanelProps> = ({
       title: "LINK_ESTABLISHED",
       desc: `Tactical bridge active via Bluetooth. Telemetry stream is live.`,
       icon: <Wifi className="text-emerald-500" size={24} />,
-      color: "bg-emerald-50 border-emerald-100 text-emerald-700"
+      color: "bg-emerald-50 border-emerald-100 text-emerald-400"
     };
     if (status === 'connecting') return {
       title: "HANDSHAKING...",
       desc: "Negotiating protocol with hardware. Check the popup/port selector.",
       icon: <Loader2 className="text-indigo-500 animate-spin" size={24} />,
       color: "bg-indigo-50 border-indigo-100 text-indigo-700"
-    };
-    if (isAdmin && (hasGattError || debugLog.some(log => log.includes('GATT_LOCK')))) return {
-      title: "DESKTOP_GATT_LOCK",
-      desc: "Device is locked by the OS. You MUST 'Forget' or 'Unpair' this device from your computer's Bluetooth settings before connecting here.",
-      icon: <Monitor className="text-red-500" size={24} />,
-      color: "bg-red-50 border-red-100 text-red-700"
     };
     if (status === 'error') return {
       title: "BRIDGE_ERROR",
@@ -109,7 +103,7 @@ const ConnectionPanel: React.FC<ConnectionPanelProps> = ({
               </div>
             </div>
 
-            <div className={`mb-6 p-5 md:p-6 rounded-[32px] border transition-all duration-500 shadow-inner ${currentStatus.color}`}>
+            <div className={`mb-6 p-5 md:p-6 rounded-[32px] border transition-all duration-500 shadow-inner max-w-[90%] mx-auto ${currentStatus.color}`}>
                <div className="flex items-center gap-4 mb-3">
                   <div className="p-2 bg-white rounded-2xl shadow-sm">
                     {currentStatus.icon}
@@ -172,7 +166,7 @@ const ConnectionPanel: React.FC<ConnectionPanelProps> = ({
                   </h4>
                   <span className="text-[8px] font-mono text-slate-300 uppercase">Live_Output</span>
                 </div>
-                <div className="bg-slate-900 rounded-2xl p-4 font-mono text-[9px] h-32 overflow-y-auto shadow-inner border border-slate-800">
+                <div className="bg-slate-900 rounded-2xl p-4 font-mono text-[9px] h-32 overflow-y-auto shadow-inner border border-slate-800 max-w-[85%] mx-auto">
                   {debugLog.map((log, i) => (
                     <div key={i} className={`mb-1 break-all ${
                       log.includes('ERROR') || log.includes('FAULT') || log.includes('EXCEPTION') ? 'text-red-400' : 
